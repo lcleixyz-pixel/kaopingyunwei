@@ -1,0 +1,348 @@
+// ═══════════════════════════════════════════════════
+// 考评分支机构管理系统 — Prisma 数据库模型
+// 数据库：SQLite（起步）→ PostgreSQL（扩展）
+// ═══════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// 1. 租户（分支机构）
+// ─────────────────────────────────────────────
+model Tenant {
+  id          String       @id @default(uuid())
+  code        String       @unique
+  name        String
+  type        TenantType
+  status      TenantStatus @default(ACTIVE)
+  contactName String?
+  contactPhone String?
+  address     String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  users       User[]
+  examPlans   ExamPlan[]
+  candidates  Candidate[]
+  auditLogs   AuditLog[]
+
+  @@map("tenants")
+}
+
+enum TenantType {
+  HQ
+  BRANCH
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+// ─────────────────────────────────────────────
+// 2. 用户
+// ─────────────────────────────────────────────
+model User {
+  id        String     @id @default(uuid())
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  username  String
+  password  String     // bcrypt哈希
+  realName  String
+  role      UserRole
+  phone     String?
+  email     String?
+  status    UserStatus @default(ACTIVE)
+  lastLoginAt DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  auditLogs AuditLog[]
+  reminders Reminder[]
+
+  @@unique([tenantId, username])
+  @@map("users")
+}
+
+enum UserRole {
+  SYS_ADMIN
+  HQ_ADMIN
+  HQ_STAFF
+  BRANCH_ADMIN
+  BRANCH_STAFF
+  EXAMINER
+  INSPECTOR
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  LOCKED
+}
+
+// ─────────────────────────────────────────────
+// 3. 考评计划
+// ─────────────────────────────────────────────
+model ExamPlan {
+  id            String     @id @default(uuid())
+  tenantId      String
+  tenant        Tenant     @relation(fields: [tenantId], references: [id])
+  title         String
+  examDate      DateTime
+  profession    String
+  level         String
+  examType      ExamType
+  location      String
+  maxCandidates Int        @default(0)
+  status        PlanStatus @default(DRAFT)
+  notes         String?
+  createdBy     String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  nodes       ExamNode[]
+  candidates  Candidate[]
+  archives    Archive[]
+
+  @@map("exam_plans")
+}
+
+enum ExamType {
+  THEORY
+  PRACTICE
+  COMPREHENSIVE
+}
+
+enum PlanStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  PUBLISHED
+  CANCELLED
+}
+
+// ─────────────────────────────────────────────
+// 4. 考评节点（核心业务）
+// ─────────────────────────────────────────────
+model ExamNode {
+  id          String     @id @default(uuid())
+  planId      String
+  plan        ExamPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  nodeType    NodeType
+  deadline    DateTime
+  completedAt DateTime?
+  status      NodeStatus @default(PENDING)
+  assignedTo  String?
+  notes       String?
+  attachments String?    // JSON string array
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  reminders Reminder[]
+  auditLogs AuditLog[]
+
+  @@map("exam_nodes")
+}
+
+enum NodeType {
+  PLAN_CREATE
+  REGISTRATION
+  ROOM_ARRANGE
+  EXAM_PREPARE
+  EXAM_DAY
+  SCORE_RECORD
+  SCORE_PUBLISH
+  CERT_MANAGE
+  COMPLETE
+}
+
+enum NodeStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+  SKIPPED
+}
+
+// ─────────────────────────────────────────────
+// 5. 考生
+// ─────────────────────────────────────────────
+model Candidate {
+  id          String          @id @default(uuid())
+  tenantId    String
+  tenant      Tenant          @relation(fields: [tenantId], references: [id])
+  planId      String
+  plan        ExamPlan        @relation(fields: [planId], references: [id], onDelete: Cascade)
+  name        String
+  idCard      String          // 加密存储
+  phone       String?
+  gender      String
+  education   String?
+  workYears   Int?
+  photo       String?
+  applyLevel  String
+  status      CandidateStatus @default(PENDING)
+  examRoom    String?
+  seatNo      String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  score       Score?
+  certificate Certificate?
+
+  @@map("candidates")
+}
+
+enum CandidateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXAMINED
+  PASSED
+  FAILED
+}
+
+// ─────────────────────────────────────────────
+// 6. 成绩
+// ─────────────────────────────────────────────
+model Score {
+  id            String    @id @default(uuid())
+  candidateId   String    @unique
+  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  theoryScore   Float?
+  practiceScore Float?
+  totalScore    Float?
+  isPass        Boolean   @default(false)
+  evaluatedBy   String?
+  verifiedBy    String?
+  evaluatedAt   DateTime?
+  verifiedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("scores")
+}
+
+// ─────────────────────────────────────────────
+// 7. 证书
+// ─────────────────────────────────────────────
+model Certificate {
+  id          String     @id @default(uuid())
+  candidateId String     @unique
+  candidate   Candidate  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  certNo      String     @unique
+  issueDate   DateTime?
+  status      CertStatus @default(PENDING)
+  issuedBy    String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("certificates")
+}
+
+enum CertStatus {
+  PENDING
+  PRINTED
+  ISSUED
+  REISSUE_REQUESTED
+}
+
+// ─────────────────────────────────────────────
+// 8. 档案
+// ─────────────────────────────────────────────
+model Archive {
+  id        String        @id @default(uuid())
+  planId    String
+  plan      ExamPlan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  filePath  String
+  fileSize  Int
+  sealHash  String
+  status    ArchiveStatus @default(SEALED)
+  createdAt DateTime      @default(now())
+
+  @@map("archives")
+}
+
+enum ArchiveStatus {
+  SEALED
+  OPENED
+}
+
+// ─────────────────────────────────────────────
+// 9. 提醒
+// ─────────────────────────────────────────────
+model Reminder {
+  id          String          @id @default(uuid())
+  nodeId      String
+  node        ExamNode        @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  type        ReminderType
+  content     String
+  scheduledAt DateTime
+  sentAt      DateTime?
+  channel     String          @default("IN_APP")
+  status      ReminderStatus  @default(PENDING)
+  createdAt   DateTime        @default(now())
+
+  @@map("reminders")
+}
+
+enum ReminderType {
+  NODE_START
+  NODE_DEADLINE
+  NODE_OVERDUE
+  SYSTEM_NOTICE
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+// ─────────────────────────────────────────────
+// 10. 审计日志（全操作留痕）
+// ─────────────────────────────────────────────
+model AuditLog {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id])
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id])
+  examNodeId String?
+  examNode   ExamNode? @relation(fields: [examNodeId], references: [id])
+  action     String
+  target     String
+  targetId   String?
+  oldValue   String?
+  newValue   String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────
+// 11. 系统配置（KV存储）
+// ─────────────────────────────────────────────
+model Config {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("configs")
+}

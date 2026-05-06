@@ -1,0 +1,52 @@
+# ═══════════════════════════════════════════════════
+# Cursor AI 行为规范 — 考评分支机构管理系统
+# ═══════════════════════════════════════════════════
+
+## 项目信息
+- 项目名称：考评分支机构管理系统
+- 用途：职业技能等级认定考务全流程管理
+- 技术栈：React 19 + TypeScript + Vite + Tailwind + shadcn/ui + Express + Prisma + SQLite + Docker
+- 架构：多租户SaaS，总部集中部署，Docker一键启动
+
+## 前端规范
+- 使用 React 19 + TypeScript 严格模式
+- 函数式组件 + Hooks（禁止使用类组件）
+- 状态管理使用 Zustand
+- UI组件使用 shadcn/ui + Tailwind CSS
+- 页面组件在 src/pages/ 目录下
+- 可复用组件在 src/components/ 目录下
+- API请求统一使用 src/hooks/useApi.ts
+- 路由使用 react-router-dom v7
+- 所有组件必须导出默认的 React.FC
+
+## 后端规范
+- 使用 Express + TypeScript（ESM模块）
+- 数据库操作必须通过 Prisma Client
+- 禁止直接拼接SQL
+- API返回统一格式：{ success, data?, error?, meta? }
+- 路由文件在 src/backend/src/routes/ 目录下
+- 业务逻辑在 src/backend/src/services/ 目录下
+- 中间件在 src/backend/src/middleware/ 目录下
+- 工具函数在 src/backend/src/utils/ 目录下
+
+## 安全规范
+- 所有API（除登录外）必须认证
+- 敏感操作记录审计日志
+- 多租户场景必须过滤tenantId
+- 密码使用 bcryptjs 哈希
+- 敏感字段（身份证等）AES加密存储
+- JWT Token 7天过期
+
+## 命名规范
+- 组件/类型：PascalCase (ExamNodeCard.tsx, CompleteNodeRequest)
+- 函数/变量：camelCase (completeNode, getRemainingDays)
+- 常量：UPPER_SNAKE_CASE (MAX_PAGE_SIZE, DEFAULT_TIMEOUT)
+- 文件与默认导出同名
+- 接口名以 I 开头可选，但类型定义优先使用 type
+
+## 重要约束
+- 禁止在前端暴露数据库结构
+- 禁止在后端拼接SQL（使用Prisma ORM）
+- 所有用户输入必须校验（使用Zod）
+- API响应必须包含统一的 meta.timestamp 和 meta.requestId
+- 错误消息必须用户友好，不暴露技术细节

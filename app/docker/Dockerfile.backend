@@ -1,0 +1,41 @@
+# ═══════════════════════════════════════════════════
+# 后端 Dockerfile — Node.js + Prisma
+# ═══════════════════════════════════════════════════
+
+FROM node:20-alpine
+
+# 安装系统依赖（用于Prisma和SQLite）
+RUN apk add --no-cache openssl sqlite
+
+WORKDIR /app
+
+# 复制依赖文件
+COPY package.json package-lock.json* ./
+RUN npm install --production
+
+# 复制Prisma schema
+COPY src/backend/prisma ./prisma/
+RUN npx prisma generate
+
+# 复制后端代码
+COPY src/backend/src ./src/
+COPY src/backend/tsconfig.json ./
+
+# 创建数据目录
+RUN mkdir -p /app/data /app/data/files /app/data/backups /app/data/temp
+
+# 暴露端口
+EXPOSE 3001
+
+# 环境变量
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV DATABASE_URL="file:/app/data/exam.db"
+ENV JWT_SECRET="exam-system-jwt-secret-change-me"
+ENV ENCRYPTION_KEY="exam-system-encryption-key-32"
+ENV BACKUP_RETENTION_DAYS=30
+ENV AUTO_BACKUP_ENABLED=true
+ENV AUTO_BACKUP_TIME="02:00"
+
+# 启动命令：先初始化数据库，再启动服务
+CMD ["sh", "-c", "npx prisma migrate deploy && npx tsx src/scripts/seed.ts && npx tsx src/index.ts"]

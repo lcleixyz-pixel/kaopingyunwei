@@ -1,0 +1,70 @@
+# ═══════════════════════════════════════════════════
+# Docker Compose — 一键部署配置
+# 
+# 使用说明：
+#   1. 安装 Docker 和 Docker Compose
+#   2. 在此文件所在目录执行：docker-compose up -d
+#   3. 访问 http://localhost 即可使用
+# 
+# 数据持久化：
+#   - 数据库：./data/exam.db
+#   - 上传文件：./data/files/
+#   - 备份文件：./data/backups/
+# ═══════════════════════════════════════════════════
+
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.backend
+    container_name: exam-backend
+    restart: unless-stopped
+    volumes:
+      # 数据持久化 — 这三个目录就是全部数据
+      - exam-data:/app/data        # SQLite数据库
+      - exam-files:/app/files      # 上传的文件
+      - exam-backups:/app/backups  # 备份文件
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/data/exam.db
+      - JWT_SECRET=${JWT_SECRET:-exam-system-jwt-secret-change-me}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-exam-system-encryption-key-32}
+      - BACKUP_RETENTION_DAYS=30
+      - AUTO_BACKUP_ENABLED=true
+      - AUTO_BACKUP_TIME=02:00
+    networks:
+      - exam-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.frontend
+    container_name: exam-frontend
+    restart: unless-stopped
+    ports:
+      - "${EXAM_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - exam-network
+
+volumes:
+  exam-data:
+    driver: local
+  exam-files:
+    driver: local
+  exam-backups:
+    driver: local
+
+networks:
+  exam-network:
+    driver: bridge
