@@ -1,0 +1,209 @@
+// ═══════════════════════════════════════════════════
+// 认证路由 — 登录/登出/获取当前用户
+// ═══════════════════════════════════════════════════
+
+import { Router } from 'express';
+import { z } from 'zod';
+import { prisma } from '../lib/prisma.js';
+import { hashPassword, verifyPassword, generateToken } from '../utils/crypto.js';
+import { success, error } from '../utils/response.js';
+
+const router = Router();
+
+const loginSchema = z.object({
+  username: z.string().min(1, '用户名不能为空'),
+  password: z.string().min(1, '密码不能为空'),
+  tenantCode: z.string().optional(),
+});
+
+/**
+ * POST /api/auth/login — 用户登录
+ */
+router.post('/login', async (req, res) => {
+  try {
+    const result = loginSchema.safeParse(req.body);
+    if (!result.success) {
+      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      return;
+    }
+
+    const { username, password, tenantCode } = result.data;
+
+    // 查找用户
+    let user;
+    if (tenantCode) {
+      user = await prisma.user.findFirst({
+        where: {
+          username,
+          tenant: { code: tenantCode },
+        },
+        include: { tenant: true },
+      });
+    } else {
+      // 系统管理员不指定tenantCode
+      user = await prisma.user.findFirst({
+        where: { username },
+        include: { tenant: true },
+      });
+    }
+
+    if (!user || !user.tenant) {
+      error(res, 'LOGIN_FAILED', '用户名或密码错误', 401);
+      return;
+    }
+
+    // 验证密码
+    const isValid = await verifyPassword(password, user.password);
+    if (!isValid) {
+      error(res, 'LOGIN_FAILED', '用户名或密码错误', 401);
+      return;
+    }
+
+    // 检查用户状态
+    if (user.status !== 'ACTIVE') {
+      error(res, 'ACCOUNT_LOCKED', '账户已被锁定或禁用', 403);
+      return;
+    }
+
+    // 更新最后登录时间
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
+    // 生成token
+    const token = generateToken(user.id, user.tenantId, user.role);
+
+    success(res, {
+      token,
+      user: {
+        id: user.id,
+        tenantId: user.tenantId,
+        username: user.username,
+        realName: user.realName,
+        role: user.role,
+        phone: user.phone,
+        email: user.email,
+        status: user.status,
+        lastLoginAt: user.lastLoginAt,
+      },
+      tenant: {
+        id: user.tenant.id,
+        code: user.tenant.code,
+        name: user.tenant.name,
+        type: user.tenant.type,
+        status: user.tenant.status,
+      },
+    });
+  } catch (err) {
+    console.error('Login error:', err);
+    error(res, 'INTERNAL_ERROR', '登录失败', 500);
+  }
+});
+
+/**
+ * POST /api/auth/setup — 初始化注册（仅用于首次设置）
+ */
+router.post('/setup', async (req, res) => {
+  try {
+    // 检查是否已有用户
+    const existingUsers = await prisma.user.count();
+    if (existingUsers > 0) {
+      error(res, 'SETUP_COMPLETED', '系统已初始化，不能重复设置', 403);
+      return;
+    }
+
+    const { username, password, realName, tenantName } = req.body;
+
+    // 创建总部租户
+    const tenant = await prisma.tenant.create({
+      data: {
+        code: 'HQ001',
+        name: tenantName || '总部',
+        type: 'HQ',
+        status: 'ACTIVE',
+      },
+    });
+
+    // 创建系统管理员
+    const user = await prisma.user.create({
+      data: {
+        tenantId: tenant.id,
+        username,
+        password: await hashPassword(password),
+        realName: realName || '系统管理员',
+        role: 'SYS_ADMIN',
+        status: 'ACTIVE',
+      },
+    });
+
+    success(res, {
+      message: '系统初始化成功',
+      tenant: {
+        id: tenant.id,
+        code: tenant.code,
+        name: tenant.name,
+      },
+      user: {
+        id: user.id,
+        tenantId: user.tenantId,
+        username: user.username,
+        realName: user.realName,
+      },
+    });
+  } catch (err) {
+    console.error('Setup error:', err);
+    error(res, 'INTERNAL_ERROR', '初始化失败', 500);
+  }
+});
+
+/**
+ * GET /api/auth/me — 获取当前用户信息
+ */
+router.get('/me', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      error(res, 'UNAUTHORIZED', '未授权', 401);
+      return;
+    }
+
+    const token = authHeader.substring(7);
+    const { verifyToken } = await import('../utils/crypto.js');
+    const decoded = verifyToken(token);
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      include: { tenant: true },
+    });
+
+    if (!user) {
+      error(res, 'NOT_FOUND', '用户不存在', 404);
+      return;
+    }
+
+    success(res, {
+      user: {
+        id: user.id,
+        username: user.username,
+        realName: user.realName,
+        role: user.role,
+        phone: user.phone,
+        email: user.email,
+        status: user.status,
+        lastLoginAt: user.lastLoginAt,
+      },
+      tenant: {
+        id: user.tenant.id,
+        code: user.tenant.code,
+        name: user.tenant.name,
+        type: user.tenant.type,
+        status: user.tenant.status,
+      },
+    });
+  } catch {
+    error(res, 'UNAUTHORIZED', 'Token无效', 401);
+  }
+});
+
+export default router;

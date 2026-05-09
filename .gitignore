@@ -1,0 +1,19 @@
+.DS_Store
+
+# Dependencies and build outputs
+app/node_modules/
+app/dist/
+app/src/backend/dist/
+
+# Local runtime data
+app/data/
+app/.env
+app/.playwright-cli/
+
+# Logs and local-only files
+*.log
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

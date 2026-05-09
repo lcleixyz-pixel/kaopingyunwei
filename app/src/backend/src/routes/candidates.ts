@@ -1,0 +1,644 @@
+// ═══════════════════════════════════════════════════
+// 考生路由 — 报名、审核、管理
+// ═══════════════════════════════════════════════════
+
+import { Router } from 'express';
+import { z } from 'zod';
+import { prisma } from '../lib/prisma.js';
+import { authenticate, requireRoles } from '../middleware/auth.js';
+import { success, error } from '../utils/response.js';
+import { decrypt, encrypt } from '../utils/crypto.js';
+import { recordAudit } from '../utils/audit.js';
+import { canReadAcrossTenants, tenantWhereForRead } from '../services/accessScope.js';
+import {
+  defaultRegistrationFieldsFromCandidate,
+  filterRegistrationProfileForRole,
+  formatGateFailure,
+  isPaymentVisibleRole,
+  mergeRegistrationDefaults,
+  normalizeMaterials,
+  normalizePaymentStatus,
+  normalizeRegistrationFields,
+  renderCandidateInfoXls,
+  validateRegistrationGate,
+} from '../services/candidateRegistration.js';
+import { canAddCandidateToPlan, isRegistrationClosed, normalizeLevelLabel } from '../services/phase1Rules.js';
+import { getRejectedCandidateDisposition } from '../services/prospectiveCandidates.js';
+
+const router = Router();
+
+router.use(authenticate);
+
+const candidateSchema = z.object({
+  planId: z.string().uuid(),
+  name: z.string().optional(),
+  idCard: z.string().optional(),
+  phone: z.string().optional(),
+  gender: z.enum(['M', 'F']).optional(),
+  education: z.string().optional(),
+  workYears: z.number().int().optional(),
+  applyLevel: z.string().optional(),
+  registrationFields: z.record(z.string(), z.unknown()).optional(),
+  materials: z.record(z.string(), z.boolean()).optional(),
+  paymentStatus: z.enum(['UNPAID', 'PAID', '未缴', '已缴']).optional(),
+});
+
+const registrationProfileSchema = z.object({
+  registrationFields: z.record(z.string(), z.unknown()).optional(),
+  materials: z.record(z.string(), z.boolean()).optional(),
+  paymentStatus: z.enum(['UNPAID', 'PAID', '未缴', '已缴']).optional(),
+});
+
+/**
+ * GET /api/candidates — 考生列表
+ */
+router.get('/', async (req, res) => {
+  try {
+    const { planId, status, search } = req.query;
+
+    const where: any = tenantWhereForRead(req);
+
+    if (planId) {
+      where.planId = planId as string;
+    }
+
+    if (status && status !== 'ALL') {
+      where.status = status as string;
+    } else {
+      where.status = { not: 'REJECTED' };
+    }
+
+    if (search) {
+      where.name = { contains: search as string };
+    }
+
+    const candidates = await prisma.candidate.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        plan: {
+          include: {
+            tenant: {
+              select: { id: true, code: true, name: true, type: true },
+            },
+          },
+        },
+        score: {
+          select: { totalScore: true, isPass: true },
+        },
+        registrationProfile: true,
+      },
+    });
+
+    const canViewSensitive = canReadAcrossTenants(req.userRole)
+      || req.userRole === 'BRANCH_ADMIN'
+      || req.userRole === 'BRANCH_STAFF';
+    const sanitizedCandidates = candidates.map((c: any) => {
+      const idCard = decrypt(c.idCard);
+      return {
+        ...c,
+        idCard: canViewSensitive ? idCard : maskIdCard(c.idCard),
+        phone: canViewSensitive
+          ? c.phone
+          : c.phone
+            ? `${c.phone.slice(0, 3)}****${c.phone.slice(-4)}`
+            : null,
+        registrationProfile: buildRegistrationProfileResponse({ ...c, idCard }, req.userRole),
+      };
+    });
+
+    if (canReadAcrossTenants(req.userRole) && sanitizedCandidates.length > 0) {
+      await recordAudit(req, {
+        action: 'CANDIDATE_SENSITIVE_LIST',
+        target: 'Candidate',
+        newValue: { count: sanitizedCandidates.length, planId: planId || null },
+      });
+    }
+
+    success(res, sanitizedCandidates);
+  } catch (err) {
+    console.error('Get candidates error:', err);
+    error(res, 'INTERNAL_ERROR', '获取考生列表失败', 500);
+  }
+});
+
+/**
+ * POST /api/candidates — 添加考生
+ */
+router.post('/', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF', 'SYS_ADMIN'), async (req, res) => {
+  try {
+    const tenantId = req.tenantId!;
+    const result = candidateSchema.safeParse(req.body);
+
+    if (!result.success) {
+      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      return;
+    }
+
+    const data = result.data;
+
+    // 验证计划是否属于当前租户
+    const plan = await prisma.examPlan.findFirst({
+      where: req.userRole === 'SYS_ADMIN' ? { id: data.planId } : { id: data.planId, tenantId },
+      include: {
+        tenant: true,
+        nodes: {
+          where: { nodeType: 'REGISTRATION' },
+        },
+      },
+    });
+
+    if (!plan) {
+      error(res, 'NOT_FOUND', '考评计划不存在', 404);
+      return;
+    }
+
+    const registrationClosed = isRegistrationClosed(plan.nodes);
+    if (registrationClosed) {
+      error(res, 'REGISTRATION_CLOSED', '考试报名阶段已结束，不能继续新增考生', 400);
+      return;
+    }
+
+    if (!canAddCandidateToPlan(plan.status, registrationClosed)) {
+      error(res, 'PLAN_NOT_PUBLISHED', '计划发布后才能录入考生', 400);
+      return;
+    }
+
+    const incomingFields = normalizeRegistrationFields(data.registrationFields);
+    const name = data.name || incomingFields.姓名;
+    const idCard = data.idCard || incomingFields.证件号码;
+    const gender = data.gender || genderFromTemplate(incomingFields.性别);
+    const applyLevel = normalizeLevelLabel(data.applyLevel || levelFromTemplate(incomingFields.认定等级) || plan.level);
+
+    if (!name || !idCard || idCard.length < 15 || idCard.length > 18 || !applyLevel) {
+      error(res, 'VALIDATION_ERROR', '姓名、证件号码、申报等级为必填项', 400);
+      return;
+    }
+
+    // 加密身份证号
+    const encryptedIdCard = encrypt(idCard);
+
+    const candidate = await prisma.candidate.create({
+      data: {
+        tenantId: req.userRole === 'SYS_ADMIN' ? plan.tenantId : tenantId,
+        planId: data.planId,
+        name,
+        idCard: encryptedIdCard,
+        phone: data.phone || incomingFields.手机号码 || undefined,
+        gender,
+        education: data.education || incomingFields.文化程度 || undefined,
+        workYears: data.workYears ?? numberFromText(incomingFields.专业年限),
+        applyLevel,
+        status: 'PENDING',
+      },
+      include: {
+        plan: { include: { tenant: true } },
+        registrationProfile: true,
+      },
+    });
+
+    const defaults = defaultRegistrationFieldsFromCandidate({
+      ...candidate,
+      idCard,
+      plan,
+    });
+    const registrationFields = mergeRegistrationDefaults(incomingFields, defaults);
+    const materials = normalizeMaterials(data.materials);
+
+    const registrationProfile = await prisma.candidateRegistrationProfile.create({
+      data: {
+        candidateId: candidate.id,
+        fieldsJson: JSON.stringify(registrationFields),
+        materialsJson: JSON.stringify(materials),
+        paymentStatus: isPaymentVisibleRole(req.userRole) ? normalizePaymentStatus(data.paymentStatus) : 'UNPAID',
+      },
+    });
+
+    await recordAudit(req, {
+      action: 'CANDIDATE_CREATE',
+      target: 'Candidate',
+      targetId: candidate.id,
+      newValue: { ...candidate, idCard: '***' },
+    });
+
+    success(res, {
+      ...candidate,
+      idCard,
+      registrationProfile: buildRegistrationProfileResponse({
+        ...candidate,
+        idCard,
+        registrationProfile,
+      }, req.userRole),
+    }, 201);
+  } catch (err) {
+    console.error('Create candidate error:', err);
+    error(res, 'INTERNAL_ERROR', '添加考生失败', 500);
+  }
+});
+
+/**
+ * GET /api/candidates/export — 按官方报名表模板导出审核通过考生
+ */
+router.get('/export', async (req, res) => {
+  try {
+    const planId = typeof req.query.planId === 'string' ? req.query.planId : undefined;
+
+    if (!planId) {
+      error(res, 'VALIDATION_ERROR', '缺少计划ID', 400);
+      return;
+    }
+
+    const plan = await prisma.examPlan.findFirst({
+      where: {
+        id: planId,
+        ...tenantWhereForRead(req),
+      },
+      include: {
+        tenant: true,
+      },
+    });
+
+    if (!plan) {
+      error(res, 'NOT_FOUND', '考评计划不存在', 404);
+      return;
+    }
+
+    const candidates = await prisma.candidate.findMany({
+      where: {
+        planId: plan.id,
+        tenantId: plan.tenantId,
+        status: 'APPROVED',
+      },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        plan: {
+          include: { tenant: true },
+        },
+        registrationProfile: true,
+      },
+    });
+
+    const exportCandidates = candidates
+      .map((candidate) => {
+        const idCard = decrypt(candidate.idCard);
+        const profile = buildRegistrationProfileResponse({ ...candidate, idCard }, req.userRole);
+        const registrationFields = profile.registrationFields;
+        const gate = validateRegistrationGate({
+          registrationFields,
+          materials: profile.materials,
+          candidateStatus: candidate.status,
+        });
+        return { candidate, registrationFields, gate };
+      })
+      .filter((item) => item.gate.isEligible)
+      .map((item) => ({ registrationFields: item.registrationFields }));
+
+    if (exportCandidates.length === 0) {
+      error(res, 'NO_EXPORTABLE_CANDIDATES', '没有符合导出条件的考生：需补全模板必填项、材料齐全并审核通过', 400);
+      return;
+    }
+
+    const workbook = renderCandidateInfoXls(exportCandidates);
+    const fileName = `${plan.title}-考生信息模板.xls`.replace(/[\\/:*?"<>|]/g, '-');
+
+    await recordAudit(req, {
+      action: 'CANDIDATE_EXPORT',
+      target: 'Candidate',
+      targetId: plan.id,
+      newValue: {
+        planId: plan.id,
+        count: exportCandidates.length,
+        format: 'xls',
+      },
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.ms-excel');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    res.send(workbook);
+  } catch (err) {
+    console.error('Export candidates error:', err);
+    error(res, 'INTERNAL_ERROR', '导出考生报名表失败', 500);
+  }
+});
+
+/**
+ * GET /api/candidates/:id/registration-profile — 读取报名模板资料
+ */
+router.get('/:id/registration-profile', async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const candidate = await prisma.candidate.findFirst({
+      where: { id, ...tenantWhereForRead(req) },
+      include: {
+        plan: { include: { tenant: true } },
+        registrationProfile: true,
+      },
+    });
+
+    if (!candidate) {
+      error(res, 'NOT_FOUND', '考生不存在', 404);
+      return;
+    }
+
+    success(res, buildRegistrationProfileResponse({
+      ...candidate,
+      idCard: decrypt(candidate.idCard),
+    }, req.userRole));
+  } catch (err) {
+    console.error('Get registration profile error:', err);
+    error(res, 'INTERNAL_ERROR', '获取报名资料失败', 500);
+  }
+});
+
+/**
+ * PUT /api/candidates/:id/registration-profile — 保存报名模板资料与材料清单
+ */
+router.put('/:id/registration-profile', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const tenantId = req.tenantId!;
+    const result = registrationProfileSchema.safeParse(req.body);
+
+    if (!result.success) {
+      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      return;
+    }
+
+    const candidate = await prisma.candidate.findFirst({
+      where: req.userRole === 'SYS_ADMIN' ? { id } : { id, tenantId },
+      include: {
+        plan: { include: { tenant: true } },
+        registrationProfile: true,
+      },
+    });
+
+    if (!candidate) {
+      error(res, 'NOT_FOUND', '考生不存在', 404);
+      return;
+    }
+
+    const idCard = decrypt(candidate.idCard);
+    const oldProfile = buildRegistrationProfileResponse({ ...candidate, idCard }, req.userRole);
+    const defaults = defaultRegistrationFieldsFromCandidate({ ...candidate, idCard, plan: candidate.plan });
+    const registrationFields = mergeRegistrationDefaults(
+      result.data.registrationFields || oldProfile.registrationFields,
+      defaults,
+    );
+    const materials = normalizeMaterials(result.data.materials || oldProfile.materials);
+    const profile = await prisma.candidateRegistrationProfile.upsert({
+      where: { candidateId: id },
+      update: {
+        fieldsJson: JSON.stringify(registrationFields),
+        materialsJson: JSON.stringify(materials),
+        ...(isPaymentVisibleRole(req.userRole) && result.data.paymentStatus
+          ? { paymentStatus: normalizePaymentStatus(result.data.paymentStatus) }
+          : {}),
+      },
+      create: {
+        candidateId: id,
+        fieldsJson: JSON.stringify(registrationFields),
+        materialsJson: JSON.stringify(materials),
+        paymentStatus: isPaymentVisibleRole(req.userRole) ? normalizePaymentStatus(result.data.paymentStatus) : 'UNPAID',
+      },
+    });
+
+    await recordAudit(req, {
+      action: 'CANDIDATE_REGISTRATION_PROFILE_UPDATE',
+      target: 'CandidateRegistrationProfile',
+      targetId: profile.id,
+      oldValue: { candidateId: id, completeness: oldProfile.completeness },
+      newValue: {
+        candidateId: id,
+        completeness: validateRegistrationGate({
+          registrationFields,
+          materials,
+          candidateStatus: candidate.status,
+        }),
+      },
+    });
+
+    success(res, buildRegistrationProfileResponse({
+      ...candidate,
+      idCard,
+      registrationProfile: profile,
+    }, req.userRole));
+  } catch (err) {
+    console.error('Save registration profile error:', err);
+    error(res, 'INTERNAL_ERROR', '保存报名资料失败', 500);
+  }
+});
+
+/**
+ * POST /api/candidates/:id/approve — 审核考生
+ */
+router.post('/:id/approve', requireRoles('BRANCH_ADMIN'), async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const tenantId = req.tenantId!;
+    const { status } = req.body;
+
+    if (!['APPROVED', 'REJECTED'].includes(status)) {
+      error(res, 'VALIDATION_ERROR', '审核状态无效', 400);
+      return;
+    }
+
+    const oldCandidate = await prisma.candidate.findFirst({
+      where: { id, tenantId },
+      include: {
+        plan: { include: { tenant: true } },
+        registrationProfile: true,
+        prospectiveSource: true,
+      },
+    });
+
+    if (!oldCandidate) {
+      error(res, 'NOT_FOUND', '考生不存在', 404);
+      return;
+    }
+
+    if (status === 'APPROVED') {
+      const idCard = decrypt(oldCandidate.idCard);
+      const profile = buildRegistrationProfileResponse({ ...oldCandidate, idCard }, req.userRole);
+      const gate = validateRegistrationGate({
+        registrationFields: profile.registrationFields,
+        materials: profile.materials,
+        requireApproved: false,
+      });
+
+      if (!gate.isEligible) {
+        error(res, 'REGISTRATION_PROFILE_INCOMPLETE', '报名资料未满足审核通过条件', 400, formatGateFailure(gate));
+        return;
+      }
+    }
+
+    if (status === 'APPROVED') {
+      const candidate = await prisma.candidate.update({
+        where: { id },
+        data: { status },
+      });
+
+      await prisma.candidateRegistrationProfile.updateMany({
+        where: { candidateId: id },
+        data: {
+          reviewedBy: req.userId,
+          reviewedAt: new Date(),
+        },
+      });
+
+      await recordAudit(req, {
+        action: 'CANDIDATE_APPROVE',
+        target: 'Candidate',
+        targetId: id,
+        oldValue: { ...oldCandidate, idCard: '***' },
+        newValue: { ...candidate, idCard: '***' },
+      });
+
+      success(res, { message: '考生已审核通过' });
+      return;
+    }
+
+    const rejectResult = await prisma.$transaction(async (tx) => {
+      const disposition = getRejectedCandidateDisposition({
+        hasProspectiveSource: Boolean(oldCandidate.prospectiveSource),
+      });
+
+      if (oldCandidate.prospectiveSource) {
+        const prospectiveCandidate = await tx.prospectiveCandidate.update({
+          where: { id: oldCandidate.prospectiveSource.id },
+          data: {
+            status: 'FOLLOWING',
+            convertedCandidateId: null,
+            notes: appendCandidateNote(oldCandidate.prospectiveSource.notes, `审核驳回：${oldCandidate.plan.title}`),
+          },
+        });
+
+        await tx.candidate.delete({ where: { id } });
+        return { disposition, prospectiveCandidateId: prospectiveCandidate.id };
+      }
+
+      const phone = oldCandidate.phone || '未留存';
+      const existingProspective = await tx.prospectiveCandidate.findFirst({
+        where: {
+          tenantId,
+          name: oldCandidate.name,
+          phone,
+          convertedCandidateId: null,
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      if (existingProspective) {
+        const prospectiveCandidate = await tx.prospectiveCandidate.update({
+          where: { id: existingProspective.id },
+          data: {
+            status: 'FOLLOWING',
+            intendedOccupation: existingProspective.intendedOccupation || oldCandidate.plan.occupation,
+            intendedProfession: existingProspective.intendedProfession || oldCandidate.plan.profession,
+            intendedLevel: existingProspective.intendedLevel || oldCandidate.plan.level,
+            notes: appendCandidateNote(existingProspective.notes, `审核驳回：${oldCandidate.plan.title}`),
+          },
+        });
+
+        await tx.candidate.delete({ where: { id } });
+        return { disposition, prospectiveCandidateId: prospectiveCandidate.id };
+      }
+
+      const prospectiveCandidate = await tx.prospectiveCandidate.create({
+        data: {
+          tenantId,
+          name: oldCandidate.name,
+          phone,
+          intendedOccupation: oldCandidate.plan.occupation,
+          intendedProfession: oldCandidate.plan.profession,
+          intendedLevel: oldCandidate.plan.level,
+          source: '审核驳回',
+          status: 'FOLLOWING',
+          notes: `由计划「${oldCandidate.plan.title}」审核驳回生成`,
+        },
+      });
+
+      await tx.candidate.delete({ where: { id } });
+      return { disposition, prospectiveCandidateId: prospectiveCandidate.id };
+    });
+
+    await recordAudit(req, {
+      action: 'CANDIDATE_REJECT',
+      target: 'Candidate',
+      targetId: id,
+      oldValue: { ...oldCandidate, idCard: '***' },
+      newValue: {
+        status: 'REJECTED',
+        formalCandidateRemoved: true,
+        prospectiveCandidateId: rejectResult.prospectiveCandidateId,
+        disposition: rejectResult.disposition,
+      },
+    });
+
+    success(res, { message: '考生已审核驳回，并转回意向考生跟进中' });
+  } catch (err) {
+    console.error('Approve candidate error:', err);
+    error(res, 'INTERNAL_ERROR', '审核失败', 500);
+  }
+});
+
+export default router;
+
+function appendCandidateNote(existing: string | null | undefined, note: string): string {
+  return [existing?.trim(), note.trim()].filter(Boolean).join('\n');
+}
+
+function maskIdCard(value: string): string {
+  const idCard = decrypt(value);
+  return idCard.length > 8 ? `${idCard.slice(0, 4)}****${idCard.slice(-4)}` : idCard;
+}
+
+function buildRegistrationProfileResponse(candidate: any, role?: string) {
+  const defaults = defaultRegistrationFieldsFromCandidate(candidate);
+  const profile = candidate.registrationProfile;
+  const registrationFields = mergeRegistrationDefaults(parseJson(profile?.fieldsJson), defaults);
+  const materials = normalizeMaterials(parseJson(profile?.materialsJson));
+  const completeness = validateRegistrationGate({
+    registrationFields,
+    materials,
+    candidateStatus: candidate.status,
+  });
+
+  return filterRegistrationProfileForRole({
+    id: profile?.id,
+    registrationFields,
+    materials,
+    paymentStatus: (profile?.paymentStatus || 'UNPAID') as 'UNPAID' | 'PAID',
+    completeness,
+  }, role);
+}
+
+function parseJson(value?: string | null): Record<string, unknown> | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function genderFromTemplate(value?: string): 'M' | 'F' {
+  return value === '女' ? 'F' : 'M';
+}
+
+function levelFromTemplate(value?: string): string | undefined {
+  if (!value) return undefined;
+  if (value.includes('一级')) return '一级/高级技师';
+  if (value.includes('二级')) return '二级/技师';
+  if (value.includes('三级')) return '三级/高级工';
+  if (value.includes('四级')) return '四级/中级工';
+  if (value.includes('五级')) return '五级/初级工';
+  const match = value.match(/[1-5]/);
+  return match?.[0];
+}
+
+function numberFromText(value?: string): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}

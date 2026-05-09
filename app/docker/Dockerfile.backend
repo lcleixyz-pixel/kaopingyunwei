@@ -1,0 +1,52 @@
+# ═══════════════════════════════════════════════════
+# 后端 Dockerfile — Node.js + Prisma
+# ═══════════════════════════════════════════════════
+
+FROM node:20-alpine AS builder
+
+# 安装系统依赖（用于Prisma和SQLite）
+RUN apk add --no-cache openssl sqlite
+
+WORKDIR /app
+
+# 复制依赖文件
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# 复制后端代码并构建
+COPY src/backend ./src/backend
+RUN npx prisma generate --schema=src/backend/prisma/schema.prisma
+RUN npm run backend:build
+
+FROM node:20-alpine
+
+RUN apk add --no-cache openssl sqlite tar
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+COPY --from=builder /app/node_modules ./node_modules
+RUN npm prune --omit=dev
+
+COPY --from=builder /app/src/backend/dist ./src/backend/dist
+COPY src/backend/prisma ./src/backend/prisma
+RUN npx prisma generate --schema=src/backend/prisma/schema.prisma
+
+# 创建数据目录
+RUN mkdir -p /app/data /app/data/files /app/data/backups /app/data/temp
+
+# 暴露端口
+EXPOSE 3001
+
+# 环境变量
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV DATABASE_URL="file:/app/data/exam.db"
+ENV JWT_SECRET="exam-system-jwt-secret-change-me"
+ENV ENCRYPTION_KEY="exam-system-encryption-key-32"
+ENV BACKUP_RETENTION_DAYS=30
+ENV AUTO_BACKUP_ENABLED=true
+ENV AUTO_BACKUP_TIME="02:00"
+
+# 启动命令：先应用迁移和初始化数据，再启动已编译服务
+CMD ["sh", "-c", "sqlite3 /app/data/exam.db 'select 1;' && npx prisma migrate deploy --schema=src/backend/prisma/schema.prisma && node src/backend/dist/scripts/seed.js && node src/backend/dist/index.js"]
