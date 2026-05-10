@@ -15,8 +15,8 @@ const navItems = [
   { path: '/nodes', label: '节点追踪', icon: ClipboardList, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'] },
   { path: '/candidates', label: '考生管理', icon: Users, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'HQ_STAFF', 'BRANCH_ADMIN', 'BRANCH_STAFF'] },
   { path: '/scores', label: '成绩管理', icon: Award, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'HQ_STAFF', 'BRANCH_ADMIN', 'BRANCH_STAFF'] },
-  { path: '/certificates', label: '证书管理', icon: FileText, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'BRANCH_ADMIN'] },
-  { path: '/archives', label: '档案管理', icon: FileText, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'BRANCH_ADMIN'] },
+  { path: '/certificates', label: '证书管理', icon: FileText, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'HQ_STAFF', 'BRANCH_ADMIN', 'BRANCH_STAFF'] },
+  { path: '/archives', label: '档案管理', icon: FileText, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'HQ_STAFF', 'BRANCH_ADMIN', 'BRANCH_STAFF'] },
   { path: '/ai-ops', label: 'AI运维', icon: Bot, roles: ['SYS_ADMIN'] },
   { path: '/settings', label: '系统设置', icon: Settings, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'BRANCH_ADMIN'] },
 ];
@@ -49,12 +49,12 @@ export function Sidebar() {
   });
 
   return (
-    <aside className="w-64 bg-slate-900 text-white flex flex-col h-screen sticky top-0">
+    <aside className="w-20 md:w-64 bg-slate-900 text-white flex flex-col h-screen sticky top-0 shrink-0">
       {/* Logo */}
-      <div className="p-6 border-b border-slate-700">
-        <div className="flex items-center gap-3">
+      <div className="p-4 md:p-6 border-b border-slate-700">
+        <div className="flex items-center justify-center md:justify-start gap-3">
           <Building2 className="w-8 h-8 text-blue-400" />
-          <div>
+          <div className="hidden md:block">
             <h1 className="font-bold text-lg leading-tight">考评管理系统</h1>
             <p className="text-xs text-slate-400">职业技能等级认定</p>
           </div>
@@ -68,30 +68,31 @@ export function Sidebar() {
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              `flex items-center justify-center md:justify-start gap-3 px-3 md:px-4 py-3 rounded-lg transition-colors ${
                 isActive
                   ? 'bg-blue-600 text-white'
                   : 'text-slate-300 hover:bg-slate-800 hover:text-white'
               }`
             }
+            title={item.label}
           >
             <item.icon className="w-5 h-5" />
-            <span className="text-sm font-medium">{item.label}</span>
+            <span className="hidden md:inline text-sm font-medium">{item.label}</span>
           </NavLink>
         ))}
       </nav>
 
       {/* User Info */}
-      <div className="p-4 border-t border-slate-700">
-        <div className="flex items-center gap-3 mb-3">
+      <div className="p-3 md:p-4 border-t border-slate-700">
+        <div className="flex items-center justify-center md:justify-start gap-3 mb-3">
           <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold">
             {user?.realName?.[0] || '?'}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="hidden md:block flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{user?.realName}</p>
             <p className="text-xs text-slate-400 truncate">{tenant?.name}</p>
           </div>
-          <div className="relative">
+          <div className="hidden md:block relative">
             <Bell className="w-5 h-5 text-slate-400" />
             {reminderCount > 0 && (
               <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-red-500 rounded-full text-[10px] flex items-center justify-center">
@@ -102,10 +103,11 @@ export function Sidebar() {
         </div>
         <button
           onClick={clearAuth}
-          className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+          className="flex items-center justify-center md:justify-start gap-2 text-sm text-slate-400 hover:text-white transition-colors w-full md:w-auto"
+          title="退出登录"
         >
           <LogOut className="w-4 h-4" />
-          退出登录
+          <span className="hidden md:inline">退出登录</span>
         </button>
       </div>
     </aside>

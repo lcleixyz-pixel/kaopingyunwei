@@ -402,14 +402,10 @@ const BASE_REQUIRED_FIELDS: CandidateTemplateHeader[] = [
   '文化程度',
   '所在省（市）区',
   '考生来源',
-  '所在单位',
   '报名单位',
   '认定分类',
-  '专业',
   '考试类型',
   '民族',
-  '专业年限',
-  '证书领取方式',
 ];
 
 const BRANCH_PAYMENT_VISIBLE_ROLES = new Set(['BRANCH_ADMIN', 'BRANCH_STAFF']);

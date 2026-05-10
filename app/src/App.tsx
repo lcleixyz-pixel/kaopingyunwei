@@ -43,7 +43,7 @@ const routeConfig = [
   { path: '/nodes', element: <ExamNodes />, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'] },
   { path: '/candidates', element: <Candidates />, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'HQ_STAFF', 'BRANCH_ADMIN', 'BRANCH_STAFF'] },
   { path: '/scores', element: <Scores />, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'HQ_STAFF', 'BRANCH_ADMIN', 'BRANCH_STAFF'] },
-  { path: '/certificates', element: <Certificates />, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'BRANCH_ADMIN'] },
+  { path: '/certificates', element: <Certificates />, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'HQ_STAFF', 'BRANCH_ADMIN', 'BRANCH_STAFF'] },
   { path: '/archives', element: <Archives />, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'BRANCH_ADMIN'] },
   { path: '/ai-ops', element: <AiOps />, roles: ['SYS_ADMIN'] },
   { path: '/settings', element: <Settings />, roles: ['SYS_ADMIN', 'HQ_ADMIN', 'BRANCH_ADMIN'] },
