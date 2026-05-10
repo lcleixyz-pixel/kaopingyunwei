@@ -16,24 +16,33 @@ datasource db {
 // 1. 租户（分支机构）
 // ─────────────────────────────────────────────
 model Tenant {
-  id          String       @id @default(uuid())
-  code        String       @unique
-  name        String
-  type        TenantType
-  status      TenantStatus @default(ACTIVE)
-  contactName String?
+  id           String       @id @default(uuid())
+  code         String       @unique
+  name         String
+  type         TenantType
+  status       TenantStatus @default(ACTIVE)
+  contactName  String?
   contactPhone String?
-  address     String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  address      String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
-  users       User[]
-  examPlans   ExamPlan[]
-  candidates  Candidate[]
-  prospectiveCandidates ProspectiveCandidate[]
-  auditLogs   AuditLog[]
-  workdayCalendar WorkdayCalendar?
-  exportTemplates ExportTemplate[]
+  users                      User[]
+  examPlans                  ExamPlan[]
+  candidates                 Candidate[]
+  prospectiveCandidates      ProspectiveCandidate[]
+  auditLogs                  AuditLog[]
+  workdayCalendar            WorkdayCalendar?
+  exportTemplates            ExportTemplate[]
+  certificateSupplyRequests  CertificateSupplyRequest[]
+  certificateStockLedgers    CertificateStockLedger[]
+  certificatePrintRecords    CertificatePrintRecord[]
+  certificateVoidRecords     CertificateVoidRecord[]
+  certificateDestroyBatches  CertificateDestroyBatch[]
+  certificateReissueRequests CertificateReissueRequest[]
+  certificateStocktakes      CertificateStocktake[]
+  certificateAttachments     CertificateAttachment[]
+  archiveReportBatches       ArchiveReportBatch[]
 
   @@map("tenants")
 }
@@ -53,19 +62,19 @@ enum TenantStatus {
 // 2. 用户
 // ─────────────────────────────────────────────
 model User {
-  id        String     @id @default(uuid())
-  tenantId  String
-  tenant    Tenant     @relation(fields: [tenantId], references: [id])
-  username  String
-  password  String     // bcrypt哈希
-  realName  String
-  role      UserRole
-  phone     String?
-  email     String?
-  status    UserStatus @default(ACTIVE)
+  id          String     @id @default(uuid())
+  tenantId    String
+  tenant      Tenant     @relation(fields: [tenantId], references: [id])
+  username    String
+  password    String // bcrypt哈希
+  realName    String
+  role        UserRole
+  phone       String?
+  email       String?
+  status      UserStatus @default(ACTIVE)
   lastLoginAt DateTime?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   auditLogs AuditLog[]
   reminders Reminder[]
@@ -94,27 +103,31 @@ enum UserStatus {
 // 3. 考评计划
 // ─────────────────────────────────────────────
 model ExamPlan {
-  id            String     @id @default(uuid())
-  tenantId      String
-  tenant        Tenant     @relation(fields: [tenantId], references: [id])
-  title         String
-  occupation    String
-  examDate      DateTime
+  id                   String     @id @default(uuid())
+  tenantId             String
+  tenant               Tenant     @relation(fields: [tenantId], references: [id])
+  title                String
+  occupation           String
+  examDate             DateTime
   registrationDeadline DateTime
-  profession    String
-  level         String
-  location      String
-  maxCandidates Int        @default(0)
-  status        PlanStatus @default(DRAFT)
-  notes         String?
-  createdBy     String
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  profession           String
+  level                String
+  location             String
+  maxCandidates        Int        @default(0)
+  status               PlanStatus @default(DRAFT)
+  notes                String?
+  createdBy            String
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 
-  nodes       ExamNode[]
-  candidates  Candidate[]
-  archives    Archive[]
-  localUploadBatches LocalUploadBatch[]
+  nodes                      ExamNode[]
+  candidates                 Candidate[]
+  archives                   Archive[]
+  localUploadBatches         LocalUploadBatch[]
+  certificatePrintRecords    CertificatePrintRecord[]
+  certificateVoidRecords     CertificateVoidRecord[]
+  certificateReissueRequests CertificateReissueRequest[]
+  archiveReportBatchPlans    ArchiveReportBatchPlan[]
 
   @@map("exam_plans")
 }
@@ -141,7 +154,7 @@ model ExamNode {
   status      NodeStatus @default(PENDING)
   assignedTo  String?
   notes       String?
-  attachments String?    // JSON string array
+  attachments String? // JSON string array
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -175,29 +188,30 @@ enum NodeStatus {
 // 5. 考生
 // ─────────────────────────────────────────────
 model Candidate {
-  id          String          @id @default(uuid())
-  tenantId    String
-  tenant      Tenant          @relation(fields: [tenantId], references: [id])
-  planId      String
-  plan        ExamPlan        @relation(fields: [planId], references: [id], onDelete: Cascade)
-  name        String
-  idCard      String          // 加密存储
-  phone       String?
-  gender      String
-  education   String?
-  workYears   Int?
-  photo       String?
-  applyLevel  String
-  status      CandidateStatus @default(PENDING)
-  examRoom    String?
-  seatNo      String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id         String          @id @default(uuid())
+  tenantId   String
+  tenant     Tenant          @relation(fields: [tenantId], references: [id])
+  planId     String
+  plan       ExamPlan        @relation(fields: [planId], references: [id], onDelete: Cascade)
+  name       String
+  idCard     String // 加密存储
+  phone      String?
+  gender     String
+  education  String?
+  workYears  Int?
+  photo      String?
+  applyLevel String
+  status     CandidateStatus @default(PENDING)
+  examRoom   String?
+  seatNo     String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
 
-  score       Score?
-  certificate Certificate?
-  registrationProfile CandidateRegistrationProfile?
-  prospectiveSource ProspectiveCandidate? @relation("ProspectiveConversion")
+  score                      Score?
+  certificate                Certificate?
+  certificateReissueRequests CertificateReissueRequest[]
+  registrationProfile        CandidateRegistrationProfile?
+  prospectiveSource          ProspectiveCandidate?         @relation("ProspectiveConversion")
 
   @@map("candidates")
 }
@@ -215,9 +229,9 @@ enum CandidateStatus {
 // 5.0 意向考生（分支内部线索）
 // ─────────────────────────────────────────────
 model ProspectiveCandidate {
-  id                   String                    @id @default(uuid())
+  id                   String                     @id @default(uuid())
   tenantId             String
-  tenant               Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant               Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name                 String
   phone                String
   intendedOccupation   String?
@@ -226,10 +240,10 @@ model ProspectiveCandidate {
   source               String?
   status               ProspectiveCandidateStatus @default(FOLLOWING)
   notes                String?
-  convertedCandidateId String?                   @unique
-  convertedCandidate   Candidate?                @relation("ProspectiveConversion", fields: [convertedCandidateId], references: [id], onDelete: SetNull)
-  createdAt            DateTime                  @default(now())
-  updatedAt            DateTime                  @updatedAt
+  convertedCandidateId String?                    @unique
+  convertedCandidate   Candidate?                 @relation("ProspectiveConversion", fields: [convertedCandidateId], references: [id], onDelete: SetNull)
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
 
   @@index([tenantId, status])
   @@index([tenantId, phone])
@@ -291,28 +305,28 @@ enum LocalUploadStatus {
 // 6. 成绩
 // ─────────────────────────────────────────────
 model Score {
-  id            String    @id @default(uuid())
-  candidateId   String    @unique
-  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  theoryScore   Float?
-  practiceScore Float?
-  comprehensiveScore Float?
-  workPerformanceScore Float?
-  totalScore    Float?
-  theoryAbsent  Boolean   @default(false)
-  practiceAbsent Boolean  @default(false)
-  comprehensiveAbsent Boolean @default(false)
-  workPerformanceAbsent Boolean @default(false)
-  isPass        Boolean   @default(false)
-  resultStatus  ScoreResultStatus @default(INCOMPLETE)
-  source        ScoreSource @default(MANUAL)
-  sourceFileName String?
-  evaluatedBy   String?
-  verifiedBy    String?
-  evaluatedAt   DateTime?
-  verifiedAt    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                    String            @id @default(uuid())
+  candidateId           String            @unique
+  candidate             Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  theoryScore           Float?
+  practiceScore         Float?
+  comprehensiveScore    Float?
+  workPerformanceScore  Float?
+  totalScore            Float?
+  theoryAbsent          Boolean           @default(false)
+  practiceAbsent        Boolean           @default(false)
+  comprehensiveAbsent   Boolean           @default(false)
+  workPerformanceAbsent Boolean           @default(false)
+  isPass                Boolean           @default(false)
+  resultStatus          ScoreResultStatus @default(INCOMPLETE)
+  source                ScoreSource       @default(MANUAL)
+  sourceFileName        String?
+  evaluatedBy           String?
+  verifiedBy            String?
+  evaluatedAt           DateTime?
+  verifiedAt            DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 
   @@map("scores")
 }
@@ -332,17 +346,38 @@ enum ScoreSource {
 // 7. 证书
 // ─────────────────────────────────────────────
 model Certificate {
-  id          String     @id @default(uuid())
-  candidateId String     @unique
-  candidate   Candidate  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  certNo      String     @unique
-  issueDate   DateTime?
-  status      CertStatus @default(PENDING)
-  issuedBy    String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id               String       @id @default(uuid())
+  candidateId      String       @unique
+  candidate        Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  certNo           String       @unique
+  certNoSource     CertNoSource @default(LEGACY_AUTO)
+  issueDate        DateTime?
+  certDisplayIssueDate DateTime?
+  status           CertStatus   @default(PENDING)
+  issuedBy         String?
+  printedAt        DateTime?
+  issuedAt         DateTime?
+  deliveryMethod   String?
+  receiverName     String?
+  receiverPhone    String?
+  mailingAddress   String?
+  trackingNo       String?
+  printBatchNo     String?
+  verificationJson String?
+  issueNotes       String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  voidRecords     CertificateVoidRecord[]
+  reissueRequests CertificateReissueRequest[]
 
   @@map("certificates")
+}
+
+enum CertNoSource {
+  LOCAL_IMPORT
+  MANUAL
+  LEGACY_AUTO
 }
 
 enum CertStatus {
@@ -350,6 +385,244 @@ enum CertStatus {
   PRINTED
   ISSUED
   REISSUE_REQUESTED
+}
+
+model CertificateSupplyRequest {
+  id           String                  @id @default(uuid())
+  tenantId     String
+  tenant       Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  itemType     CertificateItemType
+  quantity     Int
+  blankCertQuantity Int @default(0)
+  shellQuantity Int @default(0)
+  responsiblePerson String?
+  contactName String?
+  contactPhone String?
+  mailingAddress String?
+  status       CertificateSupplyStatus @default(PENDING)
+  requestedBy  String?
+  requestedAt  DateTime                @default(now())
+  approvedBy   String?
+  approvedAt   DateTime?
+  dispatchedBy String?
+  dispatchedAt DateTime?
+  receivedBy   String?
+  receivedAt   DateTime?
+  notes        String?
+  rejectReason String?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  @@index([tenantId, status])
+  @@map("certificate_supply_requests")
+}
+
+model CertificateStockLedger {
+  id           String                       @id @default(uuid())
+  tenantId     String
+  tenant       Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  itemType     CertificateItemType
+  movementType CertificateStockMovementType
+  quantity     Int
+  balanceAfter Int
+  availableBalanceAfter Int @default(0)
+  pendingDestroyBalanceAfter Int @default(0)
+  responsiblePerson String @default("历史记录")
+  relatedType  String?
+  relatedId    String?
+  notes        String?
+  createdBy    String?
+  createdAt    DateTime                     @default(now())
+
+  @@index([tenantId, itemType, createdAt])
+  @@map("certificate_stock_ledgers")
+}
+
+model CertificatePrintRecord {
+  id                String   @id @default(uuid())
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId            String
+  plan              ExamPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  passedCount       Int
+  blankCertUsed     Int      @default(0)
+  shellUsed         Int      @default(0)
+  blankCertReturned Int      @default(0)
+  shellReturned     Int      @default(0)
+  blankCertVoided   Int      @default(0)
+  shellVoided       Int      @default(0)
+  actualPrintedCount Int     @default(0)
+  overrideReason    String?
+  verificationJson  String?
+  notes             String?
+  handledBy         String?
+  responsiblePerson String   @default("历史记录")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([tenantId, planId, createdAt])
+  @@map("certificate_print_records")
+}
+
+model CertificateVoidRecord {
+  id             String                   @id @default(uuid())
+  tenantId       String
+  tenant         Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId         String?
+  plan           ExamPlan?                @relation(fields: [planId], references: [id], onDelete: SetNull)
+  certificateId  String?
+  certificate    Certificate?             @relation(fields: [certificateId], references: [id], onDelete: SetNull)
+  itemType       CertificateItemType
+  quantity       Int
+  reason         String
+  status         CertificateVoidStatus    @default(PENDING_DESTROY)
+  destroyBatchId String?
+  destroyBatch   CertificateDestroyBatch? @relation(fields: [destroyBatchId], references: [id], onDelete: SetNull)
+  recordedBy     String?
+  responsiblePerson String                @default("历史记录")
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@index([tenantId, status])
+  @@map("certificate_void_records")
+}
+
+model CertificateDestroyBatch {
+  id        String                   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title     String
+  status    CertificateDestroyStatus @default(DRAFT)
+  notes     String?
+  createdBy String?
+  closedBy  String?
+  responsiblePerson String?
+  closedAt  DateTime?
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  voidRecords CertificateVoidRecord[]
+
+  @@index([tenantId, status])
+  @@map("certificate_destroy_batches")
+}
+
+model CertificateReissueRequest {
+  id              String                   @id @default(uuid())
+  tenantId        String
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId          String?
+  plan            ExamPlan?                @relation(fields: [planId], references: [id], onDelete: SetNull)
+  candidateId     String?
+  candidate       Candidate?               @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  certificateId   String?
+  certificate     Certificate?             @relation(fields: [certificateId], references: [id], onDelete: SetNull)
+  applicantName   String
+  applicantPhone  String?
+  applicantIdCard String?
+  certNo          String?
+  reason          String
+  mailingAddress  String?
+  feeCents        Int                      @default(20000)
+  mailingFeeCents Int                      @default(0)
+  status          CertificateReissueStatus @default(SUBMITTED)
+  reviewNotes     String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  reviewDueAt     DateTime
+  remakeDueAt     DateTime?
+  issuedAt        DateTime?
+  issuedBy        String?
+  responsiblePerson String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([tenantId, status])
+  @@map("certificate_reissue_requests")
+}
+
+model CertificateStocktake {
+  id             String                   @id @default(uuid())
+  tenantId       String
+  tenant         Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  itemType       CertificateItemType
+  stocktakeType  CertificateStocktakeType
+  bookBalance    Int
+  actualQuantity Int
+  variance       Int
+  notes          String?
+  handledBy      String?
+  responsiblePerson String @default("历史记录")
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@index([tenantId, stocktakeType, createdAt])
+  @@map("certificate_stocktakes")
+}
+
+model CertificateAttachment {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entityType   String
+  entityId     String
+  category     String
+  originalName String
+  filePath     String
+  mimeType     String?
+  fileSize     Int
+  uploadedBy   String?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, entityType, entityId])
+  @@map("certificate_attachments")
+}
+
+enum CertificateItemType {
+  BLANK_CERT
+  CERT_SHELL
+}
+
+enum CertificateSupplyStatus {
+  PENDING
+  APPROVED
+  DISPATCHED
+  RECEIVED
+  REJECTED
+}
+
+enum CertificateStockMovementType {
+  SUPPLY_RECEIVED
+  PRINT_USE
+  PRINT_RETURN
+  PRINT_VOID
+  REISSUE_USE
+  STOCKTAKE_ADJUST
+  DESTROY
+}
+
+enum CertificateVoidStatus {
+  PENDING_DESTROY
+  DESTROYED
+}
+
+enum CertificateDestroyStatus {
+  DRAFT
+  CLOSED
+}
+
+enum CertificateReissueStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  ISSUED
+}
+
+enum CertificateStocktakeType {
+  QUARTERLY
+  HALF_YEAR
+  ANNUAL
+  MANUAL
 }
 
 // ─────────────────────────────────────────────
@@ -373,22 +646,77 @@ enum ArchiveStatus {
   OPENED
 }
 
+model ArchiveReportBatch {
+  id                  String                   @id @default(uuid())
+  tenantId            String
+  tenant              Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  batchNo             String
+  title               String
+  uploadDate          DateTime
+  dataType            String                   @default("新增")
+  unitLeader          String
+  informationManager  String
+  status              ArchiveReportBatchStatus @default(DRAFT)
+  recordCount         Int                      @default(0)
+  summarySnapshotJson String?
+  signedFilePath      String?
+  signedOriginalName  String?
+  signedMimeType      String?
+  signedFileSize      Int?
+  dataSnapshotPath    String?
+  dataSnapshotSize    Int?
+  dataSnapshotHash    String?
+  submittedBy         String?
+  submittedAt         DateTime?
+  reviewedBy          String?
+  reviewedAt          DateTime?
+  reviewNotes         String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+
+  plans ArchiveReportBatchPlan[]
+
+  @@unique([tenantId, batchNo])
+  @@index([tenantId, status, createdAt])
+  @@map("archive_report_batches")
+}
+
+model ArchiveReportBatchPlan {
+  id        String             @id @default(uuid())
+  batchId   String
+  batch     ArchiveReportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  planId    String
+  plan      ExamPlan           @relation(fields: [planId], references: [id], onDelete: Cascade)
+  createdAt DateTime           @default(now())
+
+  @@unique([batchId, planId])
+  @@index([planId])
+  @@map("archive_report_batch_plans")
+}
+
+enum ArchiveReportBatchStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
 // ─────────────────────────────────────────────
 // 9. 提醒
 // ─────────────────────────────────────────────
 model Reminder {
-  id          String          @id @default(uuid())
+  id          String         @id @default(uuid())
   nodeId      String
-  node        ExamNode        @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  node        ExamNode       @relation(fields: [nodeId], references: [id], onDelete: Cascade)
   userId      String
-  user        User            @relation(fields: [userId], references: [id])
+  user        User           @relation(fields: [userId], references: [id])
   type        ReminderType
   content     String
   scheduledAt DateTime
   sentAt      DateTime?
-  channel     String          @default("IN_APP")
-  status      ReminderStatus  @default(PENDING)
-  createdAt   DateTime        @default(now())
+  channel     String         @default("IN_APP")
+  status      ReminderStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
 
   @@map("reminders")
 }
@@ -464,18 +792,18 @@ model WorkdayCalendar {
 // 13. 导出模板（分支模板库）
 // ─────────────────────────────────────────────
 model ExportTemplate {
-  id         String   @id @default(uuid())
-  tenantId   String
-  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name       String
-  type       String
-  fileName   String?
-  fileBase64 String?
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  type        String
+  fileName    String?
+  fileBase64  String?
   mappingJson String
-  isDefault  Boolean  @default(false)
-  createdBy  String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  isDefault   Boolean  @default(false)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([tenantId, type])
   @@map("export_templates")

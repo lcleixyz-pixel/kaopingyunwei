@@ -137,16 +137,19 @@ describe('Phase 1.1 candidate registration template', () => {
     const materials = Object.fromEntries(DEFAULT_MATERIALS.map((item) => [item.key, true]));
     const fields = {
       ...completeFields(),
+      所在单位: '',
+      专业: '',
       参加工作时间: '',
       电子邮箱: '',
+      专业年限: '',
       户籍所在地: '',
       政治面貌: '',
       学历证书编号: '',
       简要经历: '',
       通讯地址: '',
+      证书领取方式: '',
       邮政编码: '',
       邮寄地址: '',
-      证书领取方式: '快递到付',
     };
 
     const result = validateRegistrationGate({

@@ -555,15 +555,28 @@ export interface ScoreImportPreview {
 
 // ─── 证书 ───
 export type CertStatus = 'PENDING' | 'PRINTED' | 'ISSUED' | 'REISSUE_REQUESTED';
+export type CertNoSource = 'LOCAL_IMPORT' | 'MANUAL' | 'LEGACY_AUTO';
 
 export interface Certificate {
   id: string;
   candidateId: string;
   candidate?: Candidate;
   certNo: string;
+  certNoSource: CertNoSource;
   issueDate?: string;
+  certDisplayIssueDate?: string;
   status: CertStatus;
   issuedBy?: string;
+  printedAt?: string;
+  issuedAt?: string;
+  deliveryMethod?: string;
+  receiverName?: string;
+  receiverPhone?: string;
+  mailingAddress?: string;
+  trackingNo?: string;
+  printBatchNo?: string;
+  verificationJson?: string;
+  issueNotes?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -580,6 +593,64 @@ export interface Archive {
   sealHash: string;
   status: ArchiveStatus;
   createdAt: string;
+}
+
+export type ArchiveReportBatchStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+
+export interface ArchiveSummaryRow {
+  occupation: string;
+  profession: string;
+  level: string;
+  quantity: number;
+}
+
+export interface ArchiveReportPlan {
+  id: string;
+  title: string;
+  tenant?: Pick<Tenant, 'id' | 'code' | 'name' | 'type'>;
+  examDate: string;
+  occupation: string;
+  profession: string;
+  level: string;
+  certNode?: {
+    id: string;
+    status: string;
+    completedAt?: string;
+  } | null;
+  completeRecordCount: number;
+  reminder?: string | null;
+  activeBatch?: Pick<ArchiveReportBatch, 'id' | 'batchNo' | 'title' | 'status'> | null;
+}
+
+export interface ArchiveReportBatch {
+  id: string;
+  tenantId: string;
+  tenant?: Pick<Tenant, 'id' | 'code' | 'name' | 'type'>;
+  batchNo: string;
+  title: string;
+  uploadDate: string;
+  dataType: string;
+  unitLeader: string;
+  informationManager: string;
+  status: ArchiveReportBatchStatus;
+  recordCount: number;
+  summaryRows?: ArchiveSummaryRow[];
+  planIds?: string[];
+  plans?: Array<Pick<ExamPlan, 'id' | 'title' | 'examDate' | 'occupation' | 'profession' | 'level'>>;
+  signedFile?: {
+    originalName?: string | null;
+    mimeType?: string | null;
+    fileSize?: number | null;
+  } | null;
+  dataSnapshot?: {
+    fileSize?: number | null;
+    hash?: string | null;
+  } | null;
+  submittedAt?: string | null;
+  reviewedAt?: string | null;
+  reviewNotes?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ─── 提醒 ───
