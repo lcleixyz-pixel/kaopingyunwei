@@ -6,7 +6,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { authenticate } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
-import { canReadAcrossTenants } from '../services/accessScope.js';
+import { canReadAcrossTenants, nestedPublishedPlanWhereForRead } from '../services/accessScope.js';
 
 const router = Router();
 
@@ -14,10 +14,9 @@ router.use(authenticate);
 
 router.get('/', async (req, res) => {
   try {
-    const tenantId = req.tenantId!;
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const where: any = {
-      node: { plan: canReadAcrossTenants(req.userRole) ? {} : { tenantId } },
+      node: nestedPublishedPlanWhereForRead(req),
     };
 
     if (!canReadAcrossTenants(req.userRole) && req.userRole !== 'BRANCH_ADMIN') {
@@ -51,10 +50,9 @@ router.get('/', async (req, res) => {
 
 router.get('/count', async (req, res) => {
   try {
-    const tenantId = req.tenantId!;
     const where: any = {
       status: 'PENDING',
-      node: { plan: canReadAcrossTenants(req.userRole) ? {} : { tenantId } },
+      node: nestedPublishedPlanWhereForRead(req),
     };
 
     if (!canReadAcrossTenants(req.userRole) && req.userRole !== 'BRANCH_ADMIN') {
@@ -71,13 +69,12 @@ router.get('/count', async (req, res) => {
 
 router.patch('/:id/read', async (req, res) => {
   try {
-    const tenantId = req.tenantId!;
     const id = String(req.params.id);
 
     const reminder = await prisma.reminder.findFirst({
       where: {
         id,
-        node: { plan: canReadAcrossTenants(req.userRole) ? {} : { tenantId } },
+        node: nestedPublishedPlanWhereForRead(req),
       },
     });
 

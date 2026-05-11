@@ -5,10 +5,13 @@ import type { ExamNode, ExamPlan } from '@/shared';
 import { NodeCard } from '@/components/exam/NodeCard';
 import { NODE_METADATA, NODE_ORDER } from '@/lib/constants';
 import { getNodeTrackingPlans } from '@/lib/nodeTrackingRules';
+import { canCompleteNodeFromTracking, getNodeTrackingPrimaryAction } from '@/lib/nodeTrackingActions';
 import { formatDate } from '@/lib/dateUtils';
 import { useAuthStore } from '@/stores/authStore';
+import { useNavigate } from 'react-router-dom';
 
 export default function ExamNodes() {
+  const navigate = useNavigate();
   const { get, post } = useApi();
   const { user } = useAuthStore();
   const [plans, setPlans] = useState<ExamPlan[]>([]);
@@ -159,13 +162,15 @@ export default function ExamNodes() {
                 <PlanTimeline nodes={nodes} />
                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {nodes.map((node) => (
-                    <NodeCard
+                    <TrackedNodeCard
                       key={node.id}
                       node={{ ...node, plan }}
-                      onComplete={canCompleteNodes ? (item) => {
+                      canCompleteNodes={canCompleteNodes}
+                      onComplete={(item) => {
                         setCompleteNode(item);
                         setCompleteNotes('');
-                      } : undefined}
+                      }}
+                      onNavigate={(href) => navigate(href)}
                     />
                   ))}
                 </div>
@@ -215,6 +220,38 @@ export default function ExamNodes() {
         </div>
       )}
     </div>
+  );
+}
+
+function TrackedNodeCard({
+  node,
+  canCompleteNodes,
+  onComplete,
+  onNavigate,
+}: {
+  node: ExamNode;
+  canCompleteNodes: boolean;
+  onComplete: (node: ExamNode) => void;
+  onNavigate: (href: string) => void;
+}) {
+  const action = getNodeTrackingPrimaryAction(node.nodeType);
+  const isCurrent = node.status === 'IN_PROGRESS';
+
+  if (action.type === 'complete') {
+    return (
+      <NodeCard
+        node={node}
+        onComplete={canCompleteNodes && isCurrent && canCompleteNodeFromTracking(node.nodeType) ? onComplete : undefined}
+      />
+    );
+  }
+
+  return (
+    <NodeCard
+      node={node}
+      actionLabel={action.label}
+      onPrimaryAction={() => onNavigate(action.href)}
+    />
   );
 }
 

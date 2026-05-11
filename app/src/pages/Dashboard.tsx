@@ -9,8 +9,8 @@ import type { DashboardStats, ExamNode, ActivityItem, ExamPlan } from '@/shared'
 import { formatDate } from '@/lib/dateUtils';
 import { deriveBranchWorkbenchTasks, getPlanStageSummary, isBranchRole, type WorkbenchTask, type WorkbenchTaskTone } from '@/lib/workbenchRules';
 import {
-  ClipboardList, Users, AlertTriangle,
-  Building2, CalendarDays, TrendingUp, Bell, BarChart3, ArrowRight, FileCheck2, TimerReset
+  ClipboardList, AlertTriangle,
+  Building2, CalendarDays, Bell, BarChart3, ArrowRight, FileCheck2, TimerReset
 } from 'lucide-react';
 
 interface ReportRow {
@@ -90,6 +90,17 @@ export default function Dashboard() {
     nodes: allNodes,
   });
   const planSummary = getPlanStageSummary(publishedPlans);
+  const primaryPlanMetric = branchMode
+    ? {
+      title: '草稿计划',
+      value: dashboardStats?.draftPlans || 0,
+      subtitle: '分支内部未发布',
+    }
+    : {
+      title: '已发布计划',
+      value: dashboardStats?.publishedPlans ?? dashboardStats?.totalPlans ?? 0,
+      subtitle: '分支已发布可监管',
+    };
 
   return (
     <div className="space-y-6">
@@ -157,30 +168,30 @@ export default function Dashboard() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatsCard
-          title="进行中计划"
-          value={dashboardStats?.activePlans || 0}
-          subtitle={`共 ${dashboardStats?.totalPlans || 0} 个计划`}
+          title={primaryPlanMetric.title}
+          value={primaryPlanMetric.value}
+          subtitle={primaryPlanMetric.subtitle}
           icon={ClipboardList}
           variant="default"
         />
         <StatsCard
-          title="考生总数"
-          value={dashboardStats?.totalCandidates || 0}
-          subtitle="本季度"
-          icon={Users}
+          title="考前计划"
+          value={dashboardStats?.preExamPlans || 0}
+          subtitle="已发布，考试日未到"
+          icon={CalendarDays}
           variant="success"
         />
         <StatsCard
-          title="待处理节点"
-          value={dashboardStats?.pendingNodes || 0}
-          subtitle={`${dashboardStats?.pendingReminders || 0} 条提醒`}
-          icon={TrendingUp}
+          title="考后计划"
+          value={dashboardStats?.postExamPlans || 0}
+          subtitle="待成绩、证书或归档"
+          icon={FileCheck2}
           variant="warning"
         />
         <StatsCard
-          title="逾期节点"
-          value={dashboardStats?.overdueNodes || 0}
-          subtitle="需立即处理"
+          title="风险计划"
+          value={dashboardStats?.riskPlans || 0}
+          subtitle={`${dashboardStats?.overdueNodes || 0} 个逾期节点`}
           icon={AlertTriangle}
           variant="danger"
         />
@@ -228,20 +239,24 @@ export default function Dashboard() {
               最近动态
             </h3>
             <div className="space-y-4">
-              {dashboardStats?.recentActivities.map((activity: ActivityItem) =>(
-                <div key={activity.id} className="flex gap-3 text-sm">
-                  <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
-                    activity.type === 'NODE_OVERDUE' ? 'bg-red-500' :
-                    activity.type === 'NODE_COMPLETE' ? 'bg-green-500' :
-                    activity.type === 'PLAN_CREATE' ? 'bg-blue-500' :
-                    'bg-amber-500'
-                  }`} />
-                  <div>
-                    <p className="font-medium text-slate-800">{activity.title}</p>
-                    <p className="text-slate-500 text-xs mt-0.5">{activity.description}</p>
+              {(dashboardStats?.recentActivities.length || 0) > 0 ? (
+                dashboardStats?.recentActivities.map((activity: ActivityItem) =>(
+                  <div key={activity.id} className="flex gap-3 text-sm">
+                    <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                      activity.type === 'NODE_OVERDUE' ? 'bg-red-500' :
+                      activity.type === 'NODE_COMPLETE' ? 'bg-green-500' :
+                      activity.type === 'PLAN_CREATE' ? 'bg-blue-500' :
+                      'bg-amber-500'
+                    }`} />
+                    <div>
+                      <p className="font-medium text-slate-800">{activity.title}</p>
+                      <p className="text-slate-500 text-xs mt-0.5">{activity.description}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">暂无新的业务进展。</p>
+              )}
             </div>
           </div>
 

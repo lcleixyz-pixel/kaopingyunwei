@@ -6,6 +6,8 @@ import { formatDate, getCountdownStatus } from '@/lib/dateUtils';
 interface NodeCardProps {
   node: ExamNode;
   onComplete?: (node: ExamNode) => void;
+  actionLabel?: string;
+  onPrimaryAction?: (node: ExamNode) => void;
   onViewDetail?: (node: ExamNode) => void;
 }
 
@@ -17,7 +19,7 @@ const statusIcons = {
   SKIPPED: XCircle,
 };
 
-export function NodeCard({ node, onComplete, onViewDetail }: NodeCardProps) {
+export function NodeCard({ node, onComplete, actionLabel, onPrimaryAction, onViewDetail }: NodeCardProps) {
   const meta = NODE_METADATA[node.nodeType];
   const displayStatus = node.isOverdue && node.status !== 'COMPLETED' ? 'OVERDUE' : node.status;
   const StatusIcon = statusIcons[displayStatus];
@@ -73,6 +75,16 @@ export function NodeCard({ node, onComplete, onViewDetail }: NodeCardProps) {
           className="mt-4 w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
         >
           {node.isOverdue ? '逾期补录完成' : '标记完成'}
+        </button>
+      ) : onPrimaryAction && actionLabel ? (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrimaryAction(node);
+          }}
+          className="mt-4 w-full py-2 px-4 bg-white/80 hover:bg-white text-slate-700 border border-slate-300 rounded-lg text-sm font-medium transition-colors"
+        >
+          {actionLabel}
         </button>
       ) : null}
     </div>

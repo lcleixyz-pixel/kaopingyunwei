@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   canAddCandidateToPlan,
   canCompleteNode,
+  canCompleteNodeFromTracking,
   canRollbackPlan,
   getCancelPlanBlockReason,
   getWorkTypesForOccupation,
@@ -32,6 +33,16 @@ describe('Phase 1 plan and permission rules', () => {
     assert.equal(canCompleteNode('HQ_ADMIN'), false);
     assert.equal(canCompleteNode('BRANCH_ADMIN'), true);
     assert.equal(canCompleteNode('BRANCH_STAFF'), true);
+  });
+
+  it('limits direct tracking completion to offline confirmation nodes', () => {
+    for (const nodeType of ['ROOM_ARRANGE', 'EXAM_PREPARE', 'EXAM_DAY', 'SCORE_PUBLISH', 'COMPLETE'] as const) {
+      assert.equal(canCompleteNodeFromTracking(nodeType), true, nodeType);
+    }
+
+    for (const nodeType of ['PLAN_CREATE', 'REGISTRATION', 'SCORE_RECORD', 'CERT_MANAGE'] as const) {
+      assert.equal(canCompleteNodeFromTracking(nodeType), false, nodeType);
+    }
   });
 
   it('activates only the first pending node when a draft plan is published', () => {

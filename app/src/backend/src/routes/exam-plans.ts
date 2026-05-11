@@ -21,7 +21,7 @@ import {
   normalizeLevelLabel,
   type CancelPlanBlockReason,
 } from '../services/phase1Rules.js';
-import { planTenantWhereForRead } from '../services/accessScope.js';
+import { isRequestedPlanStatusVisibleForRead, planTenantWhereForRead } from '../services/accessScope.js';
 import { getWorkdayCalendarConfig } from '../services/workdayCalendars.js';
 
 const router = Router();
@@ -78,6 +78,11 @@ router.get('/', async (req, res) => {
     const { status, search } = req.query;
 
     const where: any = planTenantWhereForRead(req);
+
+    if (!isRequestedPlanStatusVisibleForRead(req, status)) {
+      success(res, []);
+      return;
+    }
     
     if (status && status !== 'ALL') {
       where.status = status;

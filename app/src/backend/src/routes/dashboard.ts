@@ -6,8 +6,15 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { authenticate } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
-import { canReadAcrossTenants, planTenantWhereForRead, tenantWhereForRead } from '../services/accessScope.js';
+import {
+  canReadAcrossTenants,
+  planTenantWhereForRead,
+  publishedPlanWhereForRead,
+  tenantWhereForRead,
+} from '../services/accessScope.js';
 import { normalizeLevelLabel } from '../services/phase1Rules.js';
+import { calculateDashboardPlanMetrics } from '../services/dashboardPlanMetrics.js';
+import { formatDashboardActivities } from '../services/dashboardActivities.js';
 
 const router = Router();
 
@@ -25,55 +32,79 @@ router.get('/', async (req, res) => {
     }
 
     const planScope = planTenantWhereForRead(req);
+    const workflowPlanScope = publishedPlanWhereForRead(req);
     const tenantScope = tenantWhereForRead(req);
+    const now = new Date();
 
-    const totalPlans = await prisma.examPlan.count({
-      where: planScope,
-    });
-    
-    const activePlans = await prisma.examPlan.count({
-      where: {
-        ...planScope,
-        status: 'PUBLISHED',
-      },
-    });
-    
-    const completedPlans = await prisma.examPlan.count({
-      where: {
-        ...planScope,
-        status: 'PUBLISHED',
-      },
-    });
+    const [
+      plans,
+      overdueNodes,
+      inProgressNodes,
+      riskPlanRows,
+      totalCandidates,
+      pendingReminders,
+    ] = await Promise.all([
+      prisma.examPlan.findMany({
+        where: planScope,
+        select: {
+          id: true,
+          status: true,
+          examDate: true,
+          nodes: {
+            where: { nodeType: 'COMPLETE', status: 'COMPLETED' },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      }),
+      prisma.examNode.count({
+        where: {
+          plan: workflowPlanScope,
+          status: { in: ['PENDING', 'IN_PROGRESS'] },
+          deadline: { lt: now },
+        },
+      }),
+      prisma.examNode.count({
+        where: {
+          plan: workflowPlanScope,
+          status: 'IN_PROGRESS',
+        },
+      }),
+      prisma.examNode.findMany({
+        where: {
+          plan: workflowPlanScope,
+          status: { in: ['PENDING', 'IN_PROGRESS'] },
+          deadline: { lt: now },
+        },
+        distinct: ['planId'],
+        select: { planId: true },
+      }),
+      prisma.candidate.count({
+        where: tenantScope,
+      }),
+      prisma.reminder.count({
+        where: {
+          status: 'PENDING',
+          node: { plan: workflowPlanScope },
+        },
+      }),
+    ]);
 
-    const overdueNodes = await prisma.examNode.count({
-      where: {
-        plan: planScope,
-        status: { in: ['PENDING', 'IN_PROGRESS'] },
-        deadline: { lt: new Date() },
-      },
-    });
-
-    const pendingNodes = await prisma.examNode.count({
-      where: {
-        plan: planScope,
-        status: { in: ['PENDING', 'IN_PROGRESS'] },
-      },
-    });
-
-    const totalCandidates = await prisma.candidate.count({
-      where: tenantScope,
-    });
-
-    const pendingReminders = await prisma.reminder.count({
-      where: {
-        status: 'PENDING',
-        node: { plan: planScope },
-      },
-    });
+    const planMetrics = calculateDashboardPlanMetrics(
+      plans.map((plan) => ({
+        id: plan.id,
+        status: plan.status,
+        examDate: plan.examDate,
+        isComplete: plan.nodes.length > 0,
+      })),
+      riskPlanRows.map((row) => row.planId),
+      now
+    );
+    const completedPlans = plans.filter((plan) => plan.nodes.length > 0).length;
 
     const auditLogs = await prisma.auditLog.findMany({
       where: canReadAcrossTenants(req.userRole) ? {} : { tenantId },
-      take: 8,
+      take: 50,
       orderBy: { createdAt: 'desc' },
       include: {
         user: {
@@ -82,21 +113,19 @@ router.get('/', async (req, res) => {
       },
     });
 
-    const recentActivities = auditLogs.map((log: any) => ({
-      id: log.id,
-      type: mapAuditActionToActivityType(log.action),
-      title: mapAuditActionToTitle(log.action),
-      description: `${log.target}${log.targetId ? ` #${log.targetId.slice(0, 8)}` : ''}`,
-      timestamp: log.createdAt.toISOString(),
-      userName: log.user?.realName || log.user?.username,
-    }));
+    const recentActivities = formatDashboardActivities(auditLogs);
 
     success(res, {
-      totalPlans,
-      activePlans,
+      totalPlans: plans.length,
+      activePlans: planMetrics.preExamPlans + planMetrics.postExamPlans,
       completedPlans,
       overdueNodes,
-      pendingNodes,
+      pendingNodes: inProgressNodes,
+      draftPlans: planMetrics.draftPlans,
+      publishedPlans: planMetrics.publishedPlans,
+      preExamPlans: planMetrics.preExamPlans,
+      postExamPlans: planMetrics.postExamPlans,
+      riskPlans: planMetrics.riskPlans,
       pendingReminders,
       totalCandidates,
       totalBranches: canReadAcrossTenants(req.userRole)
@@ -122,7 +151,7 @@ router.get('/reports', async (req, res) => {
     }
 
     const plans = await prisma.examPlan.findMany({
-      where: planTenantWhereForRead(req),
+      where: publishedPlanWhereForRead(req),
       include: {
         candidates: {
           include: { score: true },
@@ -165,36 +194,6 @@ interface ReportRow {
   candidateCount: number;
   passCount: number;
   overdueNodes: number;
-}
-
-function mapAuditActionToActivityType(action: string): string {
-  if (action.includes('NODE')) return action.includes('COMPLETE') ? 'NODE_COMPLETE' : 'NODE_OVERDUE';
-  if (action.includes('PLAN')) return 'PLAN_CREATE';
-  if (action.includes('CANDIDATE')) return 'CANDIDATE_REGISTER';
-  if (action.includes('SCORE')) return 'SCORE_RECORD';
-  return 'SYSTEM';
-}
-
-function mapAuditActionToTitle(action: string): string {
-  const labels: Record<string, string> = {
-    EXAM_PLAN_CREATE: '新计划创建',
-    EXAM_PLAN_APPROVE: '计划审批',
-    EXAM_NODE_COMPLETE: '节点已完成',
-    CANDIDATE_CREATE: '新考生报名',
-    CANDIDATE_APPROVE: '考生审核',
-    SCORE_UPSERT: '成绩录入',
-    SCORE_VERIFY: '成绩复核',
-    CERTIFICATE_CREATE: '证书生成',
-    CERTIFICATE_STATUS_UPDATE: '证书状态更新',
-    ARCHIVE_SEAL: '档案封存',
-    ARCHIVE_STATUS_UPDATE: '档案状态更新',
-    BACKUP_CREATE: '数据备份',
-    RESTORE_BACKUP: '数据恢复',
-    EXPORT_CREATE: '迁移包导出',
-    SETTINGS_UPDATE: '系统设置更新',
-  };
-
-  return labels[action] || action;
 }
 
 function addReportRow(

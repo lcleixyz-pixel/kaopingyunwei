@@ -8,8 +8,8 @@ import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
 import { recordAudit } from '../utils/audit.js';
-import { canCompleteNode } from '../services/phase1Rules.js';
-import { nestedPlanTenantWhereForRead } from '../services/accessScope.js';
+import { canCompleteNode, canCompleteNodeFromTracking } from '../services/phase1Rules.js';
+import { nestedPublishedPlanWhereForRead } from '../services/accessScope.js';
 
 const router = Router();
 
@@ -28,7 +28,7 @@ router.get('/', async (req, res) => {
     const { planId, status } = req.query;
 
     const where: any = {
-      ...nestedPlanTenantWhereForRead(req),
+      ...nestedPublishedPlanWhereForRead(req),
     };
 
     if (planId) {
@@ -118,6 +118,11 @@ router.post('/:id/complete', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async
 
     if (node.status !== 'IN_PROGRESS') {
       error(res, 'NODE_NOT_CURRENT', '只能按顺序完成当前进行中的节点', 400);
+      return;
+    }
+
+    if (!canCompleteNodeFromTracking(node.nodeType)) {
+      error(res, 'NODE_REQUIRES_BUSINESS_MODULE', '该节点需在对应业务页面处理，不能在节点追踪中直接完成', 400);
       return;
     }
 

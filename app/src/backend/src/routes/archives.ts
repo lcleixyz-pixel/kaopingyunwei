@@ -17,7 +17,7 @@ import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
 import { decrypt, sha256 } from '../utils/crypto.js';
 import { recordAudit } from '../utils/audit.js';
-import { planTenantWhereForRead } from '../services/accessScope.js';
+import { publishedPlanWhereForRead } from '../services/accessScope.js';
 import {
   ARCHIVE_REPORT_HEADERS,
   buildArchiveReportRows,
@@ -97,7 +97,7 @@ router.get('/reportable-plans', async (req, res) => {
   try {
     const plans = await prisma.examPlan.findMany({
       where: {
-        ...planTenantWhereForRead(req),
+        ...publishedPlanWhereForRead(req),
         nodes: {
           some: {
             nodeType: 'CERT_MANAGE',
@@ -639,7 +639,7 @@ async function buildBatchContext(req: Request, planIds: string[]) {
   const plans = await prisma.examPlan.findMany({
     where: {
       id: { in: uniquePlanIds },
-      ...(req.userRole === 'SYS_ADMIN' ? {} : { tenantId: req.tenantId! }),
+      ...publishedPlanWhereForRead(req),
     },
     include: { tenant: true },
   });

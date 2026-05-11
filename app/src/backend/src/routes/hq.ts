@@ -10,6 +10,7 @@ import {
   normalizeMaterials,
   validateRegistrationGate,
 } from '../services/candidateRegistration.js';
+import { registrationProgressPlanWhere } from '../services/hqReports.js';
 
 const router = Router();
 
@@ -22,6 +23,7 @@ router.use(requireRoles('SYS_ADMIN', 'HQ_ADMIN', 'HQ_STAFF'));
 router.get('/reports/registration-progress', async (req, res) => {
   try {
     const plans = await prisma.examPlan.findMany({
+      where: registrationProgressPlanWhere(req),
       orderBy: { createdAt: 'desc' },
       include: {
         tenant: {

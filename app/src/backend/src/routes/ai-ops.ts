@@ -10,8 +10,8 @@ import { promisify } from 'util';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
-import config from '../config/index.js';
 import { recordAudit } from '../utils/audit.js';
+import { getOperationalSettings } from '../services/operationalSettings.js';
 
 const router = Router();
 
@@ -328,7 +328,7 @@ router.get('/logs', async (req, res) => {
 async function cleanupOldBackups(): Promise<void> {
   try {
     const files = await fs.readdir(BACKUP_DIR);
-    const retentionDays = config.BACKUP_RETENTION_DAYS;
+    const { backupRetentionDays: retentionDays } = await getOperationalSettings();
     const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
 
     for (const file of files) {

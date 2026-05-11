@@ -2,6 +2,13 @@ import type { NodeStatus, NodeType, PlanStatus, UserRole } from '@prisma/client'
 
 const BRANCH_NODE_OPERATORS: UserRole[] = ['BRANCH_ADMIN', 'BRANCH_STAFF'];
 const HEADQUARTERS_READ_ONLY_ROLES: UserRole[] = ['HQ_ADMIN', 'HQ_STAFF'];
+const TRACKING_COMPLETABLE_NODE_TYPES: NodeType[] = [
+  'ROOM_ARRANGE',
+  'EXAM_PREPARE',
+  'EXAM_DAY',
+  'SCORE_PUBLISH',
+  'COMPLETE',
+];
 const PRECIOUS_METAL_AND_GEMSTONE_OCCUPATION = '贵金属首饰与宝玉石检测员';
 const ENTRY_LEVEL_WORK_TYPE = '贵金属首饰与宝玉石检测员';
 const ADVANCED_WORK_TYPES = [
@@ -68,6 +75,10 @@ export function isHeadquartersReadOnlyRole(role: string): boolean {
 
 export function canCompleteNode(role: string): boolean {
   return BRANCH_NODE_OPERATORS.includes(role as UserRole);
+}
+
+export function canCompleteNodeFromTracking(nodeType: NodeType): boolean {
+  return TRACKING_COMPLETABLE_NODE_TYPES.includes(nodeType);
 }
 
 export function getPublishNodeStatuses(nodes: PublishNodeInput[]): PublishNodeUpdate[] {

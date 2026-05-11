@@ -16,25 +16,19 @@ const router = Router();
 router.use(authenticate);
 
 const DEFAULT_SETTINGS: Record<string, string> = {
-  systemName: '考评分支机构管理系统',
-  organizationName: 'XX职业技能鉴定中心',
-  dataRetentionYears: '8',
   autoBackupTime: '02:00',
   backupRetentionDays: '30',
   autoBackupEnabled: 'true',
   reminderEnabled: 'true',
-  emailEnabled: 'false',
+  reminderIntensity: 'ENHANCED',
 };
 
 const settingsSchema = z.object({
-  systemName: z.string().min(1).optional(),
-  organizationName: z.string().min(1).optional(),
-  dataRetentionYears: z.string().optional(),
   autoBackupTime: z.string().optional(),
   backupRetentionDays: z.string().optional(),
   autoBackupEnabled: z.string().optional(),
   reminderEnabled: z.string().optional(),
-  emailEnabled: z.string().optional(),
+  reminderIntensity: z.enum(['STANDARD', 'ENHANCED']).optional(),
 });
 
 const workdayCalendarSchema = z.object({
@@ -46,13 +40,7 @@ const workdayCalendarSchema = z.object({
 router.get('/', async (_req, res) => {
   try {
     const rows = await prisma.config.findMany();
-    const settings = { ...DEFAULT_SETTINGS };
-
-    for (const row of rows) {
-      settings[row.key] = row.value;
-    }
-
-    success(res, settings);
+    success(res, buildSettings(rows));
   } catch (err) {
     console.error('Get settings error:', err);
     error(res, 'INTERNAL_ERROR', '获取设置失败', 500);
@@ -84,10 +72,7 @@ router.patch('/', requireRoles('SYS_ADMIN', 'HQ_ADMIN'), async (req, res) => {
     });
 
     const rows = await prisma.config.findMany();
-    const settings = { ...DEFAULT_SETTINGS };
-    for (const row of rows) settings[row.key] = row.value;
-
-    success(res, settings);
+    success(res, buildSettings(rows));
   } catch (err) {
     console.error('Update settings error:', err);
     error(res, 'INTERNAL_ERROR', '保存设置失败', 500);
@@ -189,3 +174,15 @@ router.patch('/workday-calendars', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), as
 });
 
 export default router;
+
+function buildSettings(rows: { key: string; value: string }[]): Record<string, string> {
+  const settings = { ...DEFAULT_SETTINGS };
+
+  for (const row of rows) {
+    if (Object.prototype.hasOwnProperty.call(settings, row.key)) {
+      settings[row.key] = row.value;
+    }
+  }
+
+  return settings;
+}
