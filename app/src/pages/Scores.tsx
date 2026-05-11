@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { AlertTriangle, Award, CheckCircle2, FileSpreadsheet, Loader2, RefreshCw, Save, Upload } from 'lucide-react';
+import { AlertTriangle, Award, CheckCircle2, FileSpreadsheet, Loader2, RefreshCw, Save, ShieldCheck, Upload } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import {
   normalizeLevelLabel,
@@ -187,7 +187,7 @@ export default function Scores() {
   };
 
   const completeScoreRecord = async () => {
-    if (!selectedPlanId || !window.confirm('确认该计划全部考生成绩已核对无误，并结束成绩检录阶段？')) return;
+    if (!selectedPlanId || !window.confirm('确认该计划全部考生成绩已核对无误，并结束成绩检录阶段？完成后会推进计划节点，后续如需调整需重新核对留痕。')) return;
     setIsCompleting(true);
     setError('');
     setNotice('');
@@ -250,6 +250,27 @@ export default function Scores() {
             <MetricCard label="未完成" value={detail.summary.incomplete} />
             <MetricCard label="合格" value={detail.summary.pass} />
             <MetricCard label="不合格" value={detail.summary.fail} />
+          </div>
+
+          <div className={`rounded-xl border p-5 shadow-sm ${detail.summary.canComplete ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="flex items-center gap-2 font-bold text-slate-950">
+                  <ShieldCheck className={`h-5 w-5 ${detail.summary.canComplete ? 'text-emerald-600' : 'text-amber-600'}`} />
+                  成绩检录闸门
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  {detail.summary.canComplete
+                    ? '所有必考科目已完成检录，可以在确认无误后结束成绩检录节点。'
+                    : `还有 ${detail.summary.incomplete} 名考生未完成必考科目检录，暂不能结束节点。`}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-sm">
+                <span className="rounded-full bg-white/80 px-3 py-1 font-medium text-slate-700">导入前先预览</span>
+                <span className="rounded-full bg-white/80 px-3 py-1 font-medium text-slate-700">保存后自动判定</span>
+                <span className="rounded-full bg-white/80 px-3 py-1 font-medium text-slate-700">结束节点需全员完成</span>
+              </div>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">

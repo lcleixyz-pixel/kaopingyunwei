@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
-import { CalendarDays, Plus, Search, Filter, Loader2, Pencil, Send, RotateCcw, XCircle } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
+import { AlertTriangle, CalendarDays, CheckCircle2, Plus, Search, Filter, Loader2, Pencil, Send, RotateCcw, XCircle } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { getWorkTypesForOccupation, LEVEL_OPTIONS, normalizeLevelLabel, OCCUPATION_OPTIONS, type ExamPlan } from '@/shared';
 import { PLAN_STATUS_LABELS } from '@/lib/constants';
 import { formatDate } from '@/lib/dateUtils';
+import { getPlanStageSummary } from '@/lib/workbenchRules';
 import { useAuthStore } from '@/stores/authStore';
 
 const statusColors: Record<string, string> = {
@@ -47,6 +48,7 @@ export default function ExamPlans() {
   const { get, post, patch } = useApi();
   const { user } = useAuthStore();
   const [plans, setPlans] = useState<ExamPlan[]>([]);
+  const [allPlans, setAllPlans] = useState<ExamPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,6 +67,7 @@ export default function ExamPlans() {
       if (searchQuery) params.search = searchQuery;
       const data = await get<ExamPlan[]>('/exam-plans', params);
       setPlans(data);
+      setAllPlans(await get<ExamPlan[]>('/exam-plans'));
     } catch (err: any) {
       setError(err?.message || '获取计划列表失败');
     } finally {
@@ -79,6 +82,8 @@ export default function ExamPlans() {
   const displayedPlans = statusFilter === 'ALL'
     ? [...plans].sort((a, b) => getPlanStatusRank(a.status) - getPlanStatusRank(b.status) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     : plans;
+  const planSummary = useMemo(() => getPlanStageSummary(allPlans), [allPlans]);
+  const cancelledCount = useMemo(() => allPlans.filter((plan) => plan.status === 'CANCELLED').length, [allPlans]);
 
   const openCreateDialog = () => {
     setEditingPlan(null);
@@ -133,9 +138,11 @@ export default function ExamPlans() {
 
   const canManagePlans = user?.role === 'SYS_ADMIN' || user?.role === 'BRANCH_ADMIN';
 
-  const handlePublish = async (planId: string) => {
+  const handlePublish = async (plan: ExamPlan) => {
+    const ok = window.confirm(`确认发布「${plan.title}」？发布后会生成考评节点并开放报名资料整理；如需回退，正式考生会转回意向考生。`);
+    if (!ok) return;
     try {
-      await patch(`/exam-plans/${planId}/publish`);
+      await patch(`/exam-plans/${plan.id}/publish`);
       fetchPlans();
     } catch (err: any) {
       setError(err?.message || '发布失败');
@@ -203,8 +210,15 @@ export default function ExamPlans() {
         <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
       )}
 
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <PlanMetric icon={<CheckCircle2 className="h-4 w-4" />} label="已发布" value={planSummary.totalPublished} tone="green" />
+        <PlanMetric icon={<CalendarDays className="h-4 w-4" />} label="报名开放" value={planSummary.registrationOpen} tone="blue" />
+        <PlanMetric icon={<AlertTriangle className="h-4 w-4" />} label="7天内截止" value={planSummary.registrationClosingSoon} tone="amber" />
+        <PlanMetric icon={<XCircle className="h-4 w-4" />} label="已取消" value={cancelledCount} tone="slate" />
+      </div>
+
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex flex-wrap items-center gap-4">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
@@ -232,14 +246,14 @@ export default function ExamPlans() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-sm">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
             <span className="ml-3 text-slate-500">加载中...</span>
           </div>
         ) : (
-          <table className="w-full">
+          <table className="w-full min-w-[980px]">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left px-6 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">计划名称</th>
@@ -285,7 +299,7 @@ export default function ExamPlans() {
                             编辑
                           </button>
                           <button
-                            onClick={() => handlePublish(plan.id)}
+                            onClick={() => handlePublish(plan)}
                             className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-700 rounded hover:bg-green-100 transition-colors"
                             title="发布计划"
                           >
@@ -399,6 +413,29 @@ export default function ExamPlans() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function PlanMetric(props: {
+  icon: ReactNode;
+  label: string;
+  value: number;
+  tone: 'green' | 'blue' | 'amber' | 'slate';
+}) {
+  const styles = {
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    blue: 'border-blue-200 bg-blue-50 text-blue-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    slate: 'border-slate-200 bg-white text-slate-700',
+  }[props.tone];
+  return (
+    <div className={`rounded-xl border px-4 py-3 shadow-sm ${styles}`}>
+      <div className="flex items-center gap-2 text-sm font-medium">
+        {props.icon}
+        {props.label}
+      </div>
+      <div className="mt-2 text-2xl font-bold">{props.value}</div>
     </div>
   );
 }
