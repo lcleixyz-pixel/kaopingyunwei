@@ -10,9 +10,9 @@ interface StatsCardProps {
 
 const variantStyles = {
   default: 'bg-white border-slate-200',
-  warning: 'bg-amber-50 border-amber-200',
-  danger: 'bg-red-50 border-red-200',
-  success: 'bg-emerald-50 border-emerald-200',
+  warning: 'bg-white border-amber-200 shadow-[inset_0_3px_0_#f59e0b]',
+  danger: 'bg-white border-red-200 shadow-[inset_0_3px_0_#ef4444]',
+  success: 'bg-white border-emerald-200 shadow-[inset_0_3px_0_#10b981]',
 };
 
 const iconStyles = {
@@ -24,7 +24,7 @@ const iconStyles = {
 
 export function StatsCard({ title, value, subtitle, icon: Icon, variant = 'default' }: StatsCardProps) {
   return (
-    <div className={`rounded-xl border p-6 ${variantStyles[variant]}`}>
+    <div className={`rounded-xl border p-5 shadow-sm ${variantStyles[variant]}`}>
       <div className="flex items-start justify-between">
         <div className="space-y-2">
           <p className="text-sm text-slate-500">{title}</p>

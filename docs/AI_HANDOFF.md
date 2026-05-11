@@ -126,6 +126,25 @@ Phase 1.3 节点追踪与报名阶段关闭：
 
 ## 最近验证结果
 
+2026-05-11 生产验收测试：
+
+- 已清理宿主机本地 SQLite `app/data/exam.db` 并重新执行 Prisma migration + seed；清理后为 3 个租户、5 个默认账号、0 条计划/考生/意向考生/证书/审计业务记录。
+- 已执行 `EXAM_PORT=8080 docker compose --env-file .env -f docker/docker-compose.yml down -v` 清理 Docker 测试数据卷，并重新启动干净 Docker 环境。
+- `npm run backend:test`：通过，58 个测试。
+- `npm run check`：通过；前端 Vite 构建和后端 TypeScript 编译均通过。构建仍提示单个 JS chunk 超过 500 kB，属于性能优化项。
+- `npm run lint`：通过。本轮为此修复了 `Dashboard` 的 React Compiler memo 依赖问题和 `Candidates` 的多余 `useMemo` 依赖。
+- `npx prisma migrate status --schema src/backend/prisma/schema.prisma`：通过，9 个 migrations，schema 与数据库一致。
+- `EXAM_PORT=8080 docker compose --env-file .env -f docker/docker-compose.yml config`：通过。
+- `EXAM_PORT=8080 docker compose --env-file .env -f docker/docker-compose.yml up --build -d`：通过，后端 healthy，前端引用最新 bundle `index-CWD74xdQ.js`。
+- `GET http://localhost:8080/api/health`：通过，返回 `{"status":"ok","version":"1.0.0"}`。
+- `API_BASE_URL=http://localhost:8080/api npm run phase1:smoke`：通过；脚本已更新为当前“申报条件”固定选项和材料闸门，覆盖计划、节点、考生、意向转正式、导出、上传回填、报名关闭、回退、取消和总部报表闭环。
+- API 权限抽测：未登录 `/api/dashboard` 返回 401；总部访问 `/api/prospective-candidates` 返回 403；北京分部无法读取上海分部计划，详情返回 404。
+- 浏览器验收 `http://localhost:8080`：系统管理员登录后打开仪表盘、考评计划、节点追踪、考生管理、成绩管理、证书管理、档案管理、AI 运维、系统设置，页面均非白屏，无框架错误层，过滤 `localhost:8080` 的 console error/warn 为空。
+- 浏览器角色验收：`bjadmin/bjadmin123` 可见“意向考生”，默认“跟进中”，报名资料工作台显示“缴费”列；`hqadmin/hqadmin123` 不可见“意向考生”，访问该路由回到仪表盘，报名资料工作台不显示“缴费”列。
+- 移动视口 390x844 抽测仪表盘：页面非白屏，无框架错误层，console error/warn 为空。
+- Docker 构建期间 `npm audit` 提示 11 个依赖漏洞（3 moderate、8 high），生产上线前建议单独安排依赖安全治理。
+- 本轮验收写入的 Docker 测试计划、意向考生和审计记录已在收尾阶段通过清理 Docker 数据卷移除；宿主机本地 SQLite 仍保持默认 seed 基线。
+
 最近一轮 Phase 1.3 命令验证：
 
 - `npm run backend:test`：通过，31 个测试；新增覆盖发布时自动完成“制定计划”、报名节点完成后关闭新增/转入、节点追踪计划筛选和按考试日期排序。

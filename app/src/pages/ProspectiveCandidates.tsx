@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ArrowRight, Loader2, Pencil, Plus, Search, Trash2, UserPlus, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, Pencil, Plus, Search, Trash2, UserPlus, XCircle } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { EDUCATION_OPTIONS, getWorkTypesForOccupation, LEVEL_OPTIONS, normalizeLevelLabel, OCCUPATION_OPTIONS, type ConvertProspectiveCandidateResponse, type ExamPlan, type ProspectiveCandidate, type ProspectiveCandidateStatus } from '@/shared';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/dateUtils';
+import { summarizeProspects } from '@/lib/workbenchRules';
 
 interface ProspectForm {
   name: string;
@@ -76,6 +77,7 @@ export default function ProspectiveCandidates() {
   const [convertForm, setConvertForm] = useState<ConvertForm>(emptyConvertForm);
 
   const canDelete = user?.role === 'BRANCH_ADMIN';
+  const summary = useMemo(() => summarizeProspects(candidates), [candidates]);
   const publishedPlans = useMemo(
     () => plans.filter((plan) => plan.status === 'PUBLISHED' && !plan.registrationClosed),
     [plans],
@@ -159,7 +161,7 @@ export default function ProspectiveCandidates() {
     const duplicate = candidates.find((candidate) => (
       candidate.phone === form.phone.trim() && candidate.id !== editingCandidate?.id
     ));
-    if (duplicate && !window.confirm(`已存在手机号 ${form.phone.trim()} 的意向考生，仍然保存吗？`)) return;
+    if (duplicate && !window.confirm(`重复手机号提醒：${form.phone.trim()} 已存在于「${duplicate.name}」。仍然保存会保留两条线索，请确认是否继续。`)) return;
 
     setSaving(true);
     setError('');
@@ -243,8 +245,22 @@ export default function ProspectiveCandidates() {
 
       {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>}
 
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        <ProspectMetric icon={<UserPlus className="h-4 w-4" />} label="跟进中" value={summary.following} tone="blue" />
+        <ProspectMetric icon={<CheckCircle2 className="h-4 w-4" />} label="已转正式" value={summary.converted} tone="green" />
+        <ProspectMetric icon={<CalendarIcon />} label="可转计划" value={publishedPlans.length} tone="slate" />
+        <ProspectMetric icon={<AlertTriangle className="h-4 w-4" />} label="重复手机号" value={summary.duplicatePhones.length} tone={summary.duplicatePhones.length > 0 ? 'amber' : 'slate'} />
+      </div>
+
+      {summary.duplicatePhones.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span className="font-semibold">重复手机号：</span>
+          {summary.duplicatePhones.join('、')}。转正式前建议先合并备注或确认是否为同一人。
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-64 max-w-sm">
+        <div className="relative w-full min-w-0 sm:max-w-sm sm:flex-1 sm:min-w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
@@ -415,7 +431,7 @@ export default function ProspectiveCandidates() {
                 <div className="font-medium text-slate-900">{convertingCandidate.name} · {convertingCandidate.phone}</div>
                 {selectedPlan ? (
                   <div className="mt-1">
-                    {selectedPlan.title} · {selectedPlan.occupation} · {selectedPlan.profession} · {normalizeLevelLabel(selectedPlan.level)} · {formatDate(selectedPlan.examDate)}
+                    {selectedPlan.title} · {selectedPlan.occupation} · {selectedPlan.profession} · {normalizeLevelLabel(selectedPlan.level)} · 考试 {formatDate(selectedPlan.examDate)} · 报名截止 {formatDate(selectedPlan.registrationDeadline)}
                   </div>
                 ) : (
                   <div className="mt-1 text-amber-700">当前没有可转入的已发布计划，或计划报名阶段已结束</div>
@@ -426,7 +442,7 @@ export default function ProspectiveCandidates() {
                   <option value="">请选择计划</option>
                   {publishedPlans.map((plan) => (
                     <option key={plan.id} value={plan.id}>
-                      {plan.title} · {plan.profession} · {normalizeLevelLabel(plan.level)}
+                      {plan.title} · {plan.profession} · {normalizeLevelLabel(plan.level)} · 截止 {formatDate(plan.registrationDeadline)}
                     </option>
                   ))}
                 </select>
@@ -468,6 +484,33 @@ export default function ProspectiveCandidates() {
       )}
     </div>
   );
+}
+
+function ProspectMetric(props: {
+  icon: ReactNode;
+  label: string;
+  value: number;
+  tone: 'blue' | 'green' | 'amber' | 'slate';
+}) {
+  const toneClass = {
+    blue: 'border-blue-200 bg-blue-50 text-blue-700',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-700',
+    slate: 'border-slate-200 bg-white text-slate-700',
+  }[props.tone];
+  return (
+    <div className={`rounded-xl border px-4 py-3 shadow-sm ${toneClass}`}>
+      <div className="flex items-center gap-2 text-sm font-medium">
+        {props.icon}
+        {props.label}
+      </div>
+      <div className="mt-2 text-2xl font-bold">{props.value}</div>
+    </div>
+  );
+}
+
+function CalendarIcon() {
+  return <ArrowRight className="h-4 w-4" />;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

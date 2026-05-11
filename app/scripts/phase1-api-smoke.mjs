@@ -1,4 +1,6 @@
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3001/api';
+const LEVEL3_WORK_YEARS_CONDITION = '累计从事本职业或相关职业工作满10年。';
+const LEVEL3_WORK_YEARS_MATERIAL_KEY = 'condition_level3_1_work_years_10_commitment_social_security';
 
 async function main() {
   const unique = Date.now();
@@ -79,6 +81,7 @@ async function main() {
         workYearsProof: true,
         applicationCommitment: true,
         priorCertificate: false,
+        [LEVEL3_WORK_YEARS_MATERIAL_KEY]: true,
       },
       paymentStatus: 'PAID',
     },
@@ -130,6 +133,7 @@ async function main() {
         workYearsProof: true,
         applicationCommitment: true,
         priorCertificate: false,
+        [LEVEL3_WORK_YEARS_MATERIAL_KEY]: true,
       },
       paymentStatus: 'PAID',
     },
@@ -390,7 +394,7 @@ function registrationFields({ idCard, name, profession, level }) {
     序号: '1',
     职业工种名称: profession,
     认定等级: level,
-    申报条件: '符合申报条件',
+    申报条件: LEVEL3_WORK_YEARS_CONDITION,
     证件类型: '居民身份证',
     证件号码: idCard,
     姓名: name,

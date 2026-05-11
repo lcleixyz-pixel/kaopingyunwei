@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { CheckCircle2, Download, FileCheck2, Loader2, Pencil, Plus, Search, Upload, Users, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CreditCard, Download, FileCheck2, Loader2, Pencil, Plus, Search, Upload, Users, XCircle } from 'lucide-react';
 import { apiClient, useApi } from '@/hooks/useApi';
 import {
   ALL_MATERIALS,
@@ -21,6 +21,7 @@ import {
 } from '@/shared';
 import { formatDate } from '@/lib/dateUtils';
 import { getCandidateManagementPlanOptions, shouldLoadCandidatesForPlan } from '@/lib/candidateManagementRules';
+import { summarizeCandidateRegistration } from '@/lib/workbenchRules';
 import { useAuthStore } from '@/stores/authStore';
 
 const templateHeaders = [
@@ -123,13 +124,14 @@ export default function Candidates() {
   const canApprove = user?.role === 'BRANCH_ADMIN';
   const canBackfillUpload = user?.role === 'BRANCH_ADMIN' || user?.role === 'BRANCH_STAFF';
   const canUsePayment = user?.role === 'BRANCH_ADMIN' || user?.role === 'BRANCH_STAFF';
-  const canViewPayment = canUsePayment || candidates.some((candidate) => candidate.registrationProfile?.paymentStatus);
+  const canViewPayment = canUsePayment;
 
   const planOptions = useMemo(() => getCandidateManagementPlanOptions(plans), [plans]);
   const selectedPlan = useMemo(
     () => planOptions.find((plan) => plan.id === selectedPlanId),
     [planOptions, selectedPlanId],
   );
+  const registrationSummary = useMemo(() => summarizeCandidateRegistration(candidates), [candidates]);
   const registrationClosed = Boolean(selectedPlan?.registrationClosed);
   const applicationConditions = useMemo(
     () => getApplicationConditionsForLevel(form.registrationFields.认定等级),
@@ -148,7 +150,7 @@ export default function Candidates() {
 
   const emptyStateText = useMemo(
     () => shouldLoadCandidatesForPlan(selectedPlanId) ? '当前计划暂无考生' : '请先选择一个已发布考评计划',
-    [plans, selectedPlanId],
+    [selectedPlanId],
   );
 
   const fetchCandidates = useCallback(async () => {
@@ -297,6 +299,12 @@ export default function Candidates() {
   };
 
   const handleApprove = async (id: string, status: 'APPROVED' | 'REJECTED') => {
+    const candidate = candidates.find((item) => item.id === id);
+    const ok = window.confirm(status === 'APPROVED'
+      ? `确认通过「${candidate?.name || '该考生'}」的报名资料审核？通过后会进入可导出候选，后续修改需同步地方系统。`
+      : `确认驳回「${candidate?.name || '该考生'}」？驳回会移除正式考生记录，并恢复或生成意向考生跟进记录。`);
+    if (!ok) return;
+
     setError('');
     try {
       await post(`/candidates/${id}/approve`, { status });
@@ -419,40 +427,75 @@ export default function Candidates() {
         <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={selectedPlanId}
-            onChange={(event) => setSelectedPlanId(event.target.value)}
-            className="min-w-72 px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-          >
-            <option value="">请选择已发布考评计划</option>
-            {planOptions.map((plan) => (
-              <option key={plan.id} value={plan.id}>
-                {plan.title}{plan.registrationClosed ? '（报名已结束）' : ''}
-              </option>
-            ))}
-          </select>
-          <div className="relative max-w-sm flex-1 min-w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="搜索姓名..."
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
-            />
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <select
+              value={selectedPlanId}
+              onChange={(event) => setSelectedPlanId(event.target.value)}
+              className="w-full min-w-0 rounded-lg border border-slate-300 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 sm:w-auto sm:min-w-72"
+            >
+              <option value="">请选择已发布考评计划</option>
+              {planOptions.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.title}{plan.registrationClosed ? '（报名已结束）' : ''}
+                </option>
+              ))}
+            </select>
+            <div className="relative w-full min-w-0 sm:max-w-sm sm:flex-1 sm:min-w-64">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="搜索姓名..."
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 py-2 pl-10 pr-4 outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-600">
+            {latestUpload ? (
+              <span>最近上传：{formatDate(latestUpload.uploadedAt)} {latestUpload.notes || ''}</span>
+            ) : registrationClosed ? (
+              <span>考试报名阶段已结束</span>
+            ) : (
+              <span>尚未回填地方系统上传状态</span>
+            )}
           </div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
-          {latestUpload ? (
-            <span>最近上传：{formatDate(latestUpload.uploadedAt)} {latestUpload.notes || ''}</span>
-          ) : registrationClosed ? (
-            <span>考试报名阶段已结束</span>
-          ) : (
-            <span>尚未回填地方系统上传状态</span>
-          )}
-        </div>
+
+        {selectedPlan && (
+          <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-[1.4fr_2fr]">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${registrationClosed ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  {registrationClosed ? '报名已结束' : '报名开放'}
+                </span>
+                <span className="text-sm font-semibold text-slate-900">{selectedPlan.title}</span>
+              </div>
+              <p className="mt-2 text-sm text-slate-600">
+                {selectedPlan.profession} · {selectedPlan.level} · 考试 {formatDate(selectedPlan.examDate)} · 报名截止 {formatDate(selectedPlan.registrationDeadline)}
+              </p>
+              {registrationClosed && (
+                <p className="mt-2 flex items-start gap-2 text-xs text-amber-700">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  新增和意向转正式已关闭，仍可查看与补充留痕。
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+              <MiniMetric label="模板待补" value={registrationSummary.templateIncomplete} />
+              <MiniMetric label="材料待补" value={registrationSummary.materialIncomplete} />
+              <MiniMetric label="待审核" value={registrationSummary.pendingReview} />
+              {canViewPayment ? (
+                <MiniMetric label="未缴费" value={registrationSummary.unpaid} icon={<CreditCard className="h-4 w-4" />} />
+              ) : (
+                <MiniMetric label="审核通过" value={registrationSummary.approved} />
+              )}
+              <MiniMetric label="可导出" value={registrationSummary.exportEligible} tone="green" />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
@@ -657,6 +700,10 @@ export default function Candidates() {
               <p className="text-sm text-slate-500 mt-1">选择本次上传后是否同步结束考试报名阶段</p>
             </div>
             <div className="p-6 space-y-4">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="font-semibold">选择前请确认本次动作的后果</div>
+                <p className="mt-1">“仅记录上传”只保留地方系统上传留痕，报名仍可继续；“结束报名阶段”会关闭考试报名节点，之后不能新增考生或从意向考生转正式。</p>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">备注</label>
                 <textarea
@@ -672,14 +719,14 @@ export default function Candidates() {
                   disabled={uploadSaving}
                   className="w-full rounded-lg bg-blue-600 px-4 py-3 text-left text-sm font-medium text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
                 >
-                  报名截止，结束考试报名阶段
+                  结束报名阶段，并记录本次上传
                 </button>
                 <button
                   onClick={() => submitUploadBackfill(false)}
                   disabled={uploadSaving}
                   className="w-full rounded-lg border border-slate-300 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400 transition-colors"
                 >
-                  还要添加考生，暂不截止报名
+                  仅记录上传，报名暂不截止
                 </button>
                 <button
                   onClick={() => setShowUploadDialog(false)}
@@ -693,6 +740,18 @@ export default function Candidates() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function MiniMetric(props: { label: string; value: number; tone?: 'default' | 'green'; icon?: ReactNode }) {
+  return (
+    <div className={`rounded-lg border px-3 py-3 ${props.tone === 'green' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-700'}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium">{props.label}</span>
+        {props.icon}
+      </div>
+      <div className="mt-1 text-xl font-bold">{props.value}</div>
     </div>
   );
 }

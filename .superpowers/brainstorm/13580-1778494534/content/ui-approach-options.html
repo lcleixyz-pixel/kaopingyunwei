@@ -1,0 +1,113 @@
+<h2>选择这次 UI 优化的主方向</h2>
+<p class="subtitle">我已看过当前登录页和仪表盘。下面三个方向都适合这个考评运维系统，推荐先选 B：它能同时提升美观、可扫读性和日常操作效率。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:220px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;display:grid;grid-template-columns:64px 1fr;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+        <div style="background:#0f172a;display:flex;flex-direction:column;gap:12px;padding:16px 12px">
+          <div style="width:32px;height:32px;border-radius:8px;background:#2563eb"></div>
+          <div style="height:28px;border-radius:8px;background:#2563eb"></div>
+          <div style="height:28px;border-radius:8px;background:#1e293b"></div>
+          <div style="height:28px;border-radius:8px;background:#1e293b"></div>
+        </div>
+        <div style="padding:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+            <div>
+              <div style="width:120px;height:20px;background:#0f172a;border-radius:6px"></div>
+              <div style="width:220px;height:10px;background:#cbd5e1;border-radius:999px;margin-top:10px"></div>
+            </div>
+            <div style="width:96px;height:32px;border:1px solid #dbeafe;border-radius:8px"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+            <div style="height:78px;background:#fff;border:1px solid #e2e8f0;border-radius:10px"></div>
+            <div style="height:78px;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:10px"></div>
+            <div style="height:78px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px"></div>
+            <div style="height:78px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px"></div>
+          </div>
+          <div style="height:64px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-top:14px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 统一视觉体系</h3>
+      <p>整理颜色、字号、卡片、按钮、表格、侧栏和空状态，让现有页面更精致一致。改动范围最稳，主要提升“美观”。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:220px;background:#f7f8fb;border:1px solid #dbe3ef;border-radius:12px;display:grid;grid-template-columns:220px 1fr;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+        <div style="background:#101827;color:white;padding:18px">
+          <div style="font-weight:700;margin-bottom:22px">考评工作台</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="height:34px;border-radius:8px;background:#2563eb"></div>
+            <div style="height:34px;border-radius:8px;background:#1f2937"></div>
+            <div style="height:34px;border-radius:8px;background:#1f2937"></div>
+            <div style="height:34px;border-radius:8px;background:#1f2937"></div>
+          </div>
+          <div style="margin-top:28px;height:52px;border-radius:10px;background:#172033;border:1px solid #2b3b55"></div>
+        </div>
+        <div style="padding:18px">
+          <div style="display:flex;justify-content:space-between;gap:16px;margin-bottom:14px">
+            <div>
+              <div style="width:150px;height:22px;background:#111827;border-radius:7px"></div>
+              <div style="width:260px;height:10px;background:#cbd5e1;border-radius:999px;margin-top:9px"></div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <div style="width:86px;height:32px;background:#fff;border:1px solid #cbd5e1;border-radius:8px"></div>
+              <div style="width:96px;height:32px;background:#2563eb;border-radius:8px"></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1.2fr .8fr;gap:14px">
+            <div style="height:132px;background:#fff;border:1px solid #dbe3ef;border-radius:12px;padding:12px">
+              <div style="height:20px;width:120px;background:#0f172a;border-radius:6px;margin-bottom:12px"></div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+                <div style="height:78px;border-radius:10px;background:#eef6ff"></div>
+                <div style="height:78px;border-radius:10px;background:#fff7ed"></div>
+                <div style="height:78px;border-radius:10px;background:#ecfdf5"></div>
+              </div>
+            </div>
+            <div style="height:132px;background:#fff;border:1px solid #dbe3ef;border-radius:12px;padding:12px">
+              <div style="height:18px;width:96px;background:#0f172a;border-radius:6px;margin-bottom:12px"></div>
+              <div style="height:14px;background:#e2e8f0;border-radius:999px;margin-bottom:8px"></div>
+              <div style="height:14px;background:#e2e8f0;border-radius:999px;margin-bottom:8px;width:80%"></div>
+              <div style="height:34px;background:#f1f5f9;border-radius:8px;margin-top:18px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 运维工作台重构（推荐）</h3>
+      <p>保留现有功能，但重排首页、侧栏、关键列表和筛选区，让用户一眼看到待办、风险、进度和下一步动作。兼顾“好看”和“好用”。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:220px;background:#fbfbfc;border:1px solid #e5e7eb;border-radius:12px;display:grid;grid-template-columns:72px 1fr 300px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+        <div style="background:#fff;border-right:1px solid #e5e7eb;padding:16px 14px;display:flex;flex-direction:column;gap:12px">
+          <div style="height:36px;border-radius:10px;background:#111827"></div>
+          <div style="height:34px;border-radius:10px;background:#eef2ff"></div>
+          <div style="height:34px;border-radius:10px;background:#f3f4f6"></div>
+          <div style="height:34px;border-radius:10px;background:#f3f4f6"></div>
+        </div>
+        <div style="padding:18px">
+          <div style="height:30px;width:180px;background:#111827;border-radius:8px;margin-bottom:14px"></div>
+          <div style="height:42px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px"></div>
+          <div style="height:120px;background:#fff;border:1px solid #e5e7eb;border-radius:12px"></div>
+        </div>
+        <div style="padding:18px;background:#f8fafc;border-left:1px solid #e5e7eb">
+          <div style="height:24px;width:120px;background:#111827;border-radius:8px;margin-bottom:12px"></div>
+          <div style="height:72px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:12px"></div>
+          <div style="height:72px;background:#fff;border:1px solid #e5e7eb;border-radius:12px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 高密度专业版</h3>
+      <p>把后台做成更像企业级控制台：信息更密、右侧上下文面板更强。适合重度用户，但初次使用会更“硬核”。</p>
+    </div>
+  </div>
+</div>

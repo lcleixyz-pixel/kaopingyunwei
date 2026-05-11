@@ -130,9 +130,10 @@ export default function ExamNodes() {
           {filteredPlans.map((plan) => {
             const nodes = getOrderedNodes(plan);
             const currentNode = getCurrentNode(plan);
+            const nextNode = getNextNode(plan);
             const completedCount = nodes.filter((node) => node.status === 'COMPLETED').length;
             return (
-              <section key={plan.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <section key={plan.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                 <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 className="text-base font-bold text-slate-900">{plan.title}</h2>
@@ -144,6 +145,9 @@ export default function ExamNodes() {
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
                       当前：{currentNode ? NODE_METADATA[currentNode.nodeType]?.label : '待确认'}
                     </span>
+                    <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700">
+                      下一：{nextNode ? NODE_METADATA[nextNode.nodeType]?.label : '收尾确认'}
+                    </span>
                     <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700">
                       {completedCount}/{nodes.length} 已完成
                     </span>
@@ -152,6 +156,7 @@ export default function ExamNodes() {
                     </span>
                   </div>
                 </div>
+                <PlanTimeline nodes={nodes} />
                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {nodes.map((node) => (
                     <NodeCard
@@ -185,6 +190,9 @@ export default function ExamNodes() {
             <p className="text-sm text-slate-500 mb-4">
               {NODE_METADATA[completeNode.nodeType]?.label || completeNode.nodeType} · {completeNode.plan?.title}
             </p>
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              完成后会推进计划时间线。请确认资料、附件或异常说明已留痕，再填写完成备注。
+            </div>
             <label className="block text-sm font-medium text-slate-700 mb-1">完成备注</label>
             <textarea
               value={completeNotes}
@@ -225,6 +233,46 @@ function getCurrentNode(plan: ExamPlan): ExamNode | undefined {
   const nodes = getOrderedNodes(plan);
   return nodes.find((node) => node.status === 'IN_PROGRESS')
     || nodes.find((node) => node.status !== 'COMPLETED');
+}
+
+function getNextNode(plan: ExamPlan): ExamNode | undefined {
+  const nodes = getOrderedNodes(plan);
+  const currentNode = getCurrentNode(plan);
+  if (!currentNode) return undefined;
+  const currentIndex = nodes.findIndex((node) => node.id === currentNode.id);
+  return nodes.slice(currentIndex + 1).find((node) => node.status !== 'COMPLETED');
+}
+
+function PlanTimeline({ nodes }: { nodes: ExamNode[] }) {
+  return (
+    <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-4">
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {nodes.map((node) => {
+          const meta = NODE_METADATA[node.nodeType];
+          const isActive = node.status === 'IN_PROGRESS';
+          const isDone = node.status === 'COMPLETED';
+          const isRisk = Boolean(node.isOverdue) && !isDone;
+          return (
+            <div
+              key={node.id}
+              className={`min-w-28 rounded-lg border px-3 py-2 text-xs ${
+                isRisk
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : isActive
+                    ? 'border-blue-200 bg-blue-50 text-blue-700'
+                    : isDone
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : 'border-slate-200 bg-white text-slate-500'
+              }`}
+            >
+              <div className="font-semibold">{meta?.label || node.nodeType}</div>
+              <div className="mt-1">{formatDate(node.deadline)}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function SummaryItem(props: {
