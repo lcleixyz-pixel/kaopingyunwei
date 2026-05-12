@@ -1,7 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { Layout } from '@/components/layout/Layout';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { apiClient } from '@/hooks/useApi';
 import type { ApiResponse, Tenant, User } from '@/shared';
 import Login from '@/pages/Login';
@@ -19,6 +20,7 @@ import Settings from '@/pages/Settings';
 // 路由守卫组件
 function ProtectedRoute({ children, requiredRoles }: { children: React.ReactNode; requiredRoles?: string[] }) {
   const { isAuthenticated, isLoading, user, hasRole } = useAuthStore();
+  const location = useLocation();
 
   if (isLoading || (isAuthenticated && !user)) {
     return <div className="p-8 text-slate-500">登录状态恢复中...</div>;
@@ -32,7 +34,7 @@ function ProtectedRoute({ children, requiredRoles }: { children: React.ReactNode
     return <Navigate to="/" replace />;
   }
 
-  return <>{children}</>;
+  return <ErrorBoundary resetKey={`${location.pathname}${location.search}`}>{children}</ErrorBoundary>;
 }
 
 // 角色路由配置

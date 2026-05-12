@@ -3,7 +3,6 @@
 // ═══════════════════════════════════════════════════
 
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Router, type Request, type Response } from 'express';
@@ -24,6 +23,7 @@ import { success, error } from '../utils/response.js';
 import { recordAudit } from '../utils/audit.js';
 import { decrypt } from '../utils/crypto.js';
 import { addWorkDaysWithCalendar } from '../utils/dateUtils.js';
+import { applyPdfFont, PdfFontMissingError, requireCertificatePrintFont, requireChinesePdfFont } from '../utils/pdfFonts.js';
 import { getWorkdayCalendarConfig } from '../services/workdayCalendars.js';
 import { publishedPlanWhereForRead, tenantWhereForRead } from '../services/accessScope.js';
 import {
@@ -1004,7 +1004,10 @@ router.post('/destroy-batches', requireRoles('SYS_ADMIN', 'HQ_ADMIN'), async (re
   }
 });
 
-router.post('/destroy-batches/:id/close', requireRoles('SYS_ADMIN', 'HQ_ADMIN'), async (req, res) => {
+router.post('/destroy-batches/:id/close', requireRoles('SYS_ADMIN', 'HQ_ADMIN'), confirmDestroyBatch);
+router.post('/destroy-batches/:id/confirm-destroy', requireRoles('SYS_ADMIN', 'HQ_ADMIN'), confirmDestroyBatch);
+
+async function confirmDestroyBatch(req: Request, res: Response): Promise<void> {
   try {
     const id = String(req.params.id);
     const oldBatch = await prisma.certificateDestroyBatch.findFirst({
@@ -1017,7 +1020,7 @@ router.post('/destroy-batches/:id/close', requireRoles('SYS_ADMIN', 'HQ_ADMIN'),
       return;
     }
     if (oldBatch.status === 'CLOSED') {
-      error(res, 'ALREADY_CLOSED', '销毁批次已关闭', 400);
+      error(res, 'ALREADY_CONFIRMED_DESTROYED', '销毁批次已确认销毁', 400);
       return;
     }
 
@@ -1061,9 +1064,9 @@ router.post('/destroy-batches/:id/close', requireRoles('SYS_ADMIN', 'HQ_ADMIN'),
 
     success(res, batch);
   } catch (err) {
-    handleRouteError(res, err, '关闭销毁批次失败');
+    handleRouteError(res, err, '确认销毁批次失败');
   }
-});
+}
 
 router.get('/reissue-requests', async (req, res) => {
   try {
@@ -2235,34 +2238,9 @@ function sendPdf(
     res.setHeader('Content-Disposition', encodeContentDisposition(filename));
     res.send(Buffer.concat(chunks));
   });
-  const fontPath = findChineseFontPath();
-  if (fontPath) doc.font(fontPath);
+  applyPdfFont(doc, requireChinesePdfFont());
   render(doc);
   doc.end();
-}
-
-function findChineseFontPath(): string | null {
-  const candidates = [
-    '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
-    '/System/Library/Fonts/PingFang.ttc',
-    '/System/Library/Fonts/Hiragino Sans GB.ttc',
-    '/System/Library/Fonts/STHeiti Medium.ttc',
-    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-    '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
-  ];
-  return candidates.find((candidate) => existsSync(candidate)) || null;
-}
-
-function findCertificatePrintFontPath(): string | null {
-  const candidates = [
-    '/System/Library/Fonts/Supplemental/NotoSansKaithi-Regular.ttf',
-    '/System/Library/Fonts/Supplemental/Songti.ttc',
-    '/System/Library/Fonts/STHeiti Medium.ttc',
-    '/System/Library/Fonts/PingFang.ttc',
-    '/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc',
-    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-  ];
-  return candidates.find((candidate) => existsSync(candidate)) || findChineseFontPath();
 }
 
 function parseCertificatePrintCalibration(req: Request): CertificatePrintCalibration {
@@ -2364,11 +2342,11 @@ function renderCertificatePrintPdf(
   }>,
   calibration: CertificatePrintCalibration,
 ): void {
-  const certificateFontPath = findCertificatePrintFontPath();
-  if (certificateFontPath) doc.font(certificateFontPath);
+  const certificateFont = requireCertificatePrintFont();
+  applyPdfFont(doc, certificateFont);
   certificates.forEach((certificate, index) => {
     if (index > 0) doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
-    if (certificateFontPath) doc.font(certificateFontPath);
+    applyPdfFont(doc, certificateFont);
     drawTemplateField(doc, certificatePrintFields.name, certificate.candidate.name, calibration);
     drawTemplateField(doc, certificatePrintFields.idType, '居民身份证', calibration);
     drawTemplateField(doc, certificatePrintFields.idCard, safeDecrypt(certificate.candidate.idCard), calibration);
@@ -2529,6 +2507,10 @@ function nodeOrder(nodeType: string): number {
 
 function handleRouteError(res: Response, err: unknown, fallbackMessage: string): void {
   if (err instanceof RouteError) {
+    error(res, err.code, err.message, err.statusCode);
+    return;
+  }
+  if (err instanceof PdfFontMissingError) {
     error(res, err.code, err.message, err.statusCode);
     return;
   }

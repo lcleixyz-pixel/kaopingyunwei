@@ -10,20 +10,8 @@ import {
   type ScorePlanOption,
 } from '@/shared';
 import { formatDate } from '@/lib/dateUtils';
+import { getRequiredSubjectSummary, normalizeScorePlanDetail, type ScorePlanDetail } from '@/lib/scorePageRules';
 import { useAuthStore } from '@/stores/authStore';
-
-interface ScorePlanDetail {
-  plan: ScorePlanOption;
-  candidates: ScoreCandidateRow[];
-  summary: {
-    total: number;
-    complete: number;
-    incomplete: number;
-    pass: number;
-    fail: number;
-    canComplete: boolean;
-  };
-}
 
 interface ScoreDraft {
   theoryScore: string;
@@ -48,11 +36,6 @@ const emptyDraft: ScoreDraft = {
 };
 
 const inputClass = 'w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm disabled:bg-slate-100 disabled:text-slate-400';
-const requiredSubjectLabels: Record<string, string> = {
-  theory: '理论',
-  practice: '技能/实操',
-  comprehensive: '综合评审',
-};
 
 export default function Scores() {
   const { get, post } = useApi();
@@ -98,9 +81,10 @@ export default function Scores() {
     setIsLoadingDetail(true);
     setError('');
     try {
-      const data = await get<ScorePlanDetail>('/scores', { planId });
-      setDetail(data);
-      setDrafts(Object.fromEntries(data.candidates.map((row) => [row.candidate.id, draftFromRow(row)])));
+      const data = await get<unknown>('/scores', { planId });
+      const normalizedDetail = normalizeScorePlanDetail(data);
+      setDetail(normalizedDetail);
+      setDrafts(Object.fromEntries(normalizedDetail.candidates.map((row) => [row.candidate.id, draftFromRow(row)])));
       setPreview(null);
       setImportRows([]);
       setImportFileName('');
@@ -213,7 +197,7 @@ export default function Scores() {
           </h1>
           <p className="text-slate-500 mt-1">按考试计划进行成绩检录、导入、核对和节点流转</p>
         </div>
-        <button onClick={fetchPlans} className="flex items-center gap-2 px-4 py-2.5 border border-slate-300 hover:bg-slate-50 rounded-lg font-medium transition-colors">
+        <button type="button" onClick={fetchPlans} className="flex items-center gap-2 px-4 py-2.5 border border-slate-300 hover:bg-slate-50 rounded-lg font-medium transition-colors">
           <RefreshCw className="w-4 h-4" />
           刷新
         </button>
@@ -302,6 +286,7 @@ export default function Scores() {
                     <b>{importFileName}</b>：共 {preview.summary.total} 行，匹配 {preview.summary.matched} 行，未匹配 {preview.summary.unmatched} 行，姓名差异 {preview.summary.nameMismatches} 行
                   </div>
                   <button
+                    type="button"
                     onClick={commitImport}
                     disabled={isImporting || preview.summary.matched === 0}
                     className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white rounded-lg text-sm font-medium"
@@ -344,12 +329,13 @@ export default function Scores() {
               <div>
                 <h2 className="font-bold text-slate-900">手动检录成绩</h2>
                 <p className="text-sm text-slate-500 mt-1">
-                  必考科目：{detail.candidates[0]?.requiredSubjects.map((item) => requiredSubjectLabels[item]).join('、') || '-'}。工作业绩仅保存留痕，不参与合格判定。
+                  必考科目：{getRequiredSubjectSummary(detail.candidates)}。工作业绩仅保存留痕，不参与合格判定。
                 </p>
               </div>
               {canWrite && (
                 <div className="flex flex-wrap gap-2">
                   <button
+                    type="button"
                     onClick={saveManualScores}
                     disabled={isSaving || detail.candidates.length === 0}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg text-sm font-medium"
@@ -359,6 +345,7 @@ export default function Scores() {
                   </button>
                   {detail.summary.canComplete && (
                     <button
+                      type="button"
                       onClick={completeScoreRecord}
                       disabled={isCompleting}
                       className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white rounded-lg text-sm font-medium"
