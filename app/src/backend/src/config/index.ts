@@ -3,6 +3,7 @@
 // ═══════════════════════════════════════════════════
 
 import dotenv from 'dotenv';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -18,10 +19,22 @@ for (const envPath of [
   dotenv.config({ path: envPath, override: false });
 }
 
-const DEFAULT_JWT_SECRET = 'exam-system-default-secret-change-in-production';
-const DOCKER_DEFAULT_JWT_SECRET = 'exam-system-jwt-secret-change-me';
-const DEFAULT_ENCRYPTION_KEY = 'default-encryption-key-32-chars!';
-const DOCKER_DEFAULT_ENCRYPTION_KEY = 'exam-system-encryption-key-32';
+export const DEFAULT_JWT_SECRET = 'exam-system-default-secret-change-in-production';
+export const DOCKER_DEFAULT_JWT_SECRET = 'exam-system-jwt-secret-change-me';
+export const DEFAULT_ENCRYPTION_KEY = 'default-encryption-key-32-chars!';
+export const DOCKER_DEFAULT_ENCRYPTION_KEY = 'exam-system-encryption-key-32';
+
+export type ProductionConfig = {
+  NODE_ENV: string;
+  DATABASE_URL?: string;
+  JWT_SECRET: string;
+  ENCRYPTION_KEY: string;
+  BACKUP_DIR: string;
+  LOG_DIR: string;
+  IS_DOCKER_RUNTIME: boolean;
+};
+
+export type OperationalDirectoryConfig = Pick<ProductionConfig, 'BACKUP_DIR' | 'LOG_DIR'>;
 
 export const config = {
   NODE_ENV: process.env.NODE_ENV || 'development',
@@ -36,9 +49,13 @@ export const config = {
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || DEFAULT_ENCRYPTION_KEY,
   
   // 备份
+  BACKUP_DIR: process.env.BACKUP_DIR || path.resolve(process.cwd(), 'data/backups'),
   BACKUP_RETENTION_DAYS: parseInt(process.env.BACKUP_RETENTION_DAYS || '30', 10),
   AUTO_BACKUP_ENABLED: process.env.AUTO_BACKUP_ENABLED !== 'false',
   AUTO_BACKUP_TIME: process.env.AUTO_BACKUP_TIME || '02:00',
+
+  // 日志
+  LOG_DIR: process.env.LOG_DIR || path.resolve(process.cwd(), 'data/logs'),
   
   // 提醒
   REMINDER_ENABLED: process.env.REMINDER_ENABLED !== 'false',
@@ -47,26 +64,68 @@ export const config = {
   
   // CORS
   CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
+
+  // 运行环境
+  IS_DOCKER_RUNTIME: process.env.DOCKER_RUNTIME === 'true' || process.env.KUBERNETES_SERVICE_HOST !== undefined,
 };
 
 export function validateProductionSecrets(): void {
-  if (config.NODE_ENV !== 'production') return;
+  validateProductionConfig(config);
+}
+
+export function ensureOperationalDirectories(values: OperationalDirectoryConfig): void {
+  for (const [name, dir] of Object.entries(values)) {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.accessSync(dir, fs.constants.R_OK | fs.constants.W_OK);
+    const stat = fs.statSync(dir);
+    if (!stat.isDirectory()) {
+      throw new Error(`${name} 必须是目录: ${dir}`);
+    }
+  }
+}
+
+export function validateProductionConfig(values: ProductionConfig): void {
+  if (values.NODE_ENV !== 'production') return;
 
   const insecureSecrets = new Set([
     DEFAULT_JWT_SECRET,
     DOCKER_DEFAULT_JWT_SECRET,
+    'change-this-jwt-secret-before-production',
   ]);
   const insecureKeys = new Set([
     DEFAULT_ENCRYPTION_KEY,
     DOCKER_DEFAULT_ENCRYPTION_KEY,
+    'change-this-encryption-key-32-chars-minimum',
     'your-32-char-encryption-key-here',
   ]);
+  const errors: string[] = [];
 
-  if (insecureSecrets.has(config.JWT_SECRET)) {
-    throw new Error('生产环境必须设置安全的 JWT_SECRET，不能使用默认值');
+  if (!values.DATABASE_URL) {
+    errors.push('DATABASE_URL 不能为空');
   }
-  if (insecureKeys.has(config.ENCRYPTION_KEY) || config.ENCRYPTION_KEY.length < 32) {
-    throw new Error('生产环境必须设置至少32字符的 ENCRYPTION_KEY，不能使用默认值');
+  if (insecureSecrets.has(values.JWT_SECRET) || values.JWT_SECRET.length < 32) {
+    errors.push('JWT_SECRET 必须至少32字符且不能使用默认值');
+  }
+  if (insecureKeys.has(values.ENCRYPTION_KEY) || values.ENCRYPTION_KEY.length < 32) {
+    errors.push('ENCRYPTION_KEY 必须至少32字符且不能使用默认值');
+  }
+  if (!values.BACKUP_DIR) {
+    errors.push('BACKUP_DIR 不能为空');
+  }
+  if (!values.LOG_DIR) {
+    errors.push('LOG_DIR 不能为空');
+  }
+
+  if (values.IS_DOCKER_RUNTIME) {
+    const dockerPaths = [values.DATABASE_URL, values.BACKUP_DIR, values.LOG_DIR].filter(Boolean);
+    const allPersistentPaths = dockerPaths.every((value) => value!.includes('/app/data'));
+    if (!allPersistentPaths) {
+      errors.push('Docker 生产运行时 DATABASE_URL、BACKUP_DIR、LOG_DIR 必须指向 /app/data 持久化目录');
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`生产配置检查失败: ${errors.join('; ')}`);
   }
 }
 

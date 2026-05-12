@@ -5,6 +5,8 @@
 > 版本：v1.0  
 > 日期：2026-05-04
 
+> 部署提醒：本文包含早期架构示例，Docker Compose、云服务器、宝塔反向代理、备份恢复等生产部署步骤以 `docs/DEPLOYMENT_CLOUD.md` 和 `app/docker/docker-compose.yml` 为准。
+
 ---
 
 ## 一、项目定位

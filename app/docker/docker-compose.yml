@@ -29,6 +29,9 @@ services:
     environment:
       - NODE_ENV=production
       - DATABASE_URL=file:/app/data/exam.db
+      - BACKUP_DIR=/app/data/backups
+      - LOG_DIR=/app/data/logs
+      - DOCKER_RUNTIME=true
       - BACKUP_RETENTION_DAYS=30
       - AUTO_BACKUP_ENABLED=true
       - AUTO_BACKUP_TIME=02:00

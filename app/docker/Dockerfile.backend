@@ -33,7 +33,7 @@ COPY src/backend/prisma ./src/backend/prisma
 RUN npx prisma generate --schema=src/backend/prisma/schema.prisma
 
 # 创建数据目录
-RUN mkdir -p /app/data /app/data/files /app/data/backups /app/data/temp
+RUN mkdir -p /app/data /app/data/files /app/data/backups /app/data/logs /app/data/temp
 
 # 暴露端口
 EXPOSE 3001
@@ -44,6 +44,9 @@ ENV PORT=3001
 ENV DATABASE_URL="file:/app/data/exam.db"
 ENV JWT_SECRET="exam-system-jwt-secret-change-me"
 ENV ENCRYPTION_KEY="exam-system-encryption-key-32"
+ENV BACKUP_DIR="/app/data/backups"
+ENV LOG_DIR="/app/data/logs"
+ENV DOCKER_RUNTIME=true
 ENV BACKUP_RETENTION_DAYS=30
 ENV AUTO_BACKUP_ENABLED=true
 ENV AUTO_BACKUP_TIME="02:00"

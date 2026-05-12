@@ -23,24 +23,31 @@
 | 后端 | Express + TypeScript + Prisma |
 | 数据库 | SQLite（单文件，零运维） |
 | 部署 | Docker Compose 一键启动 |
-| AI运维 | 内置运维面板，自然语言交互 |
+| AI运维 | 内置规则化运维面板 |
 
 ## 快速开始
 
 ### 方式一：Docker 一键部署（推荐）
 
 ```bash
-# 1. 克隆项目
-cd exam-system
+# 1. 进入应用目录
+cd app
 
 # 2. 复制环境变量配置
 cp .env.example .env
 
-# 3. 一键启动
+# 3. 修改 .env 中的 JWT_SECRET、ENCRYPTION_KEY
+# 云服务器 + 宝塔反向代理场景建议设置：
+# EXAM_PORT=127.0.0.1:8080
+
+# 4. 一键启动
 ./scripts/start.sh
 
-# 4. 打开浏览器访问 http://localhost
+# 5. 本机检查
+curl http://127.0.0.1:8080/api/health
 ```
+
+云服务器、宝塔 Linux 面板、域名 HTTPS、备份和恢复请以 [云服务器部署指南](../docs/DEPLOYMENT_CLOUD.md) 为准。
 
 ### 方式二：手动启动（开发模式）
 
@@ -77,7 +84,7 @@ npm run dev
 
 ## AI运维助手
 
-打开系统设置 → AI运维中心，用自然语言管理系统：
+打开 AI 运维中心，使用规则化运维面板管理系统：
 
 | 你说 | AI做 |
 |------|------|
@@ -91,7 +98,6 @@ npm run dev
 ```
 exam-system/
 ├── 📄 .env                  # 环境变量配置
-├── 📄 docker-compose.yml    # Docker部署配置
 ├── 📄 README.md             # 本文件
 │
 ├── 📁 src/
@@ -103,14 +109,10 @@ exam-system/
 │   │       ├── 📁 jobs/     # 定时任务
 │   │       └── 📁 utils/    # 工具函数
 │   │
-│   ├── 📁 frontend/         # React前端
-│   │   └── 📁 src/
-│   │       ├── 📁 pages/    # 页面组件
-│   │       ├── 📁 components/ # UI组件
-│   │       ├── 📁 stores/   # Zustand状态
-│   │       └── 📁 hooks/    # 自定义Hooks
-│   │
-│   └── 📁 shared/           # 前后端共享类型
+│   ├── 📁 pages/            # 页面组件
+│   ├── 📁 components/       # UI组件
+│   ├── 📁 stores/           # Zustand状态
+│   └── 📁 hooks/            # 自定义Hooks
 │
 ├── 📁 docker/               # Docker配置
 ├── 📁 scripts/              # 运维脚本
@@ -118,7 +120,7 @@ exam-system/
 │   ├── 📄 stop.sh           # 一键停止
 │   └── 📄 backup.sh         # 一键备份
 │
-└── 📁 data/                 # 数据目录（Docker卷）
+└── 📁 data/                 # 本地开发数据目录
     ├── 📄 exam.db           # SQLite数据库
     ├── 📁 files/            # 上传文件
     └── 📁 backups/          # 备份文件
@@ -126,11 +128,11 @@ exam-system/
 
 ## 使用 Cursor/Codex 开发
 
-本系统为AI开发优化，配备了 `.cursorrules` 文件和 `docs/AI_CONTEXT.md`：
+本系统为 AI 开发优化，项目关键上下文位于根目录 `docs/`：
 
 ```
 1. 打开项目 in Cursor
-2. 粘贴 docs/AI_CONTEXT.md 作为上下文
+2. 先阅读 `docs/AI_HANDOFF.md`、`docs/PROJECT_CONTEXT.md`、`docs/BUSINESS_RULES.md`
 3. 描述需求 → AI生成代码 → 审查 → 测试 → 提交
 ```
 
@@ -169,7 +171,7 @@ npx prisma migrate reset --schema src/backend/prisma/schema.prisma
 
 ## 数据安全
 
-- 传输：全站HTTPS（TLS 1.3）
+- 传输：生产环境必须通过宝塔/Nginx/云负载均衡配置 HTTPS
 - 存储：敏感字段AES-256加密
 - 访问：基于RBAC的细粒度权限
 - 审计：全操作留痕，不可篡改
@@ -177,18 +179,15 @@ npx prisma migrate reset --schema src/backend/prisma/schema.prisma
 
 ## 迁移说明
 
-**三个文件夹走天下**：
+当前 Docker 部署使用 named volumes 持久化生产数据：
 
 ```
-data/          ← SQLite数据库（exam.db）
-files/         ← 上传的证书、档案等
-backups/       ← 自动备份文件
+exam-data       ← SQLite 数据库和数据目录
+exam-files      ← 上传文件
+exam-backups    ← 备份文件
 ```
 
-迁移步骤：
-1. 复制三个文件夹到新机器
-2. 执行 `docker-compose up -d`
-3. 完成！
+迁移、备份和恢复步骤请以 [云服务器部署指南](../docs/DEPLOYMENT_CLOUD.md) 为准。
 
 ## 许可证
 
@@ -196,4 +195,4 @@ MIT License — 可私有化部署，可提供给其他分支机构使用。
 
 ---
 
-> 遇到问题？查看 `docs/SKILL.md` 获取完整技术文档。
+> 遇到部署问题？优先查看 [云服务器部署指南](../docs/DEPLOYMENT_CLOUD.md)。
