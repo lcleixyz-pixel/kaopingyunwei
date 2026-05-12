@@ -7,7 +7,7 @@ import { NodeCard } from '@/components/exam/NodeCard';
 import { useApi } from '@/hooks/useApi';
 import type { DashboardStats, ExamNode, ActivityItem, ExamPlan } from '@/shared';
 import { formatDate } from '@/lib/dateUtils';
-import { deriveBranchWorkbenchTasks, getPlanStageSummary, isBranchRole, type WorkbenchTask, type WorkbenchTaskTone } from '@/lib/workbenchRules';
+import { deriveBranchWorkbenchTasks, getDisplayTenantName, getPlanStageSummary, isBranchRole, type WorkbenchTask, type WorkbenchTaskTone } from '@/lib/workbenchRules';
 import {
   ClipboardList, AlertTriangle,
   Building2, CalendarDays, Bell, BarChart3, ArrowRight, FileCheck2, TimerReset
@@ -46,7 +46,7 @@ interface HqRegistrationProgressRow {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { get } = useApi();
-  const { user } = useAuthStore();
+  const { user, tenant } = useAuthStore();
   const userRole = user?.role;
   const { dashboardStats, setDashboardStats, setNodes } = useExamStore();
   const [recentNodes, setRecentNodes] = useState<ExamNode[]>([]);
@@ -269,7 +269,7 @@ export default function Dashboard() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-500">机构名称</span>
-                <span className="font-medium">{user?.tenant?.name || '总部'}</span>
+                <span className="font-medium">{getDisplayTenantName({ tenantName: tenant?.name, userTenantName: user?.tenant?.name })}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">分支机构</span>

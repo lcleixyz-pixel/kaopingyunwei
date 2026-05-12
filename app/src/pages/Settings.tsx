@@ -51,8 +51,10 @@ export default function Settings() {
   useEffect(() => {
     async function fetchSettings() {
       try {
-        const data = await get<SettingsForm>('/settings');
-        setSettings({ ...defaultSettings, ...data });
+        if (!isBranchAdmin) {
+          const data = await get<SettingsForm>('/settings');
+          setSettings({ ...defaultSettings, ...data });
+        }
         const calendars = await get<WorkdayCalendar[]>('/settings/workday-calendars');
         const currentCalendar = calendars[0] || null;
         setCalendar(currentCalendar);
@@ -64,7 +66,7 @@ export default function Settings() {
     }
 
     fetchSettings();
-  }, [get]);
+  }, [get, isBranchAdmin]);
 
   const update = (key: keyof SettingsForm, value: string) => {
     setSettings((current) => ({ ...current, [key]: value }));

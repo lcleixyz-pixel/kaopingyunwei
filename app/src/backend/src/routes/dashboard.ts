@@ -15,6 +15,7 @@ import {
 import { normalizeLevelLabel } from '../services/phase1Rules.js';
 import { calculateDashboardPlanMetrics } from '../services/dashboardPlanMetrics.js';
 import { formatDashboardActivities } from '../services/dashboardActivities.js';
+import { dashboardOverdueNodeWhere } from '../services/dashboardNodeMetrics.js';
 
 const router = Router();
 
@@ -60,8 +61,7 @@ router.get('/', async (req, res) => {
       prisma.examNode.count({
         where: {
           plan: workflowPlanScope,
-          status: { in: ['PENDING', 'IN_PROGRESS'] },
-          deadline: { lt: now },
+          ...dashboardOverdueNodeWhere(now),
         },
       }),
       prisma.examNode.count({
@@ -73,8 +73,7 @@ router.get('/', async (req, res) => {
       prisma.examNode.findMany({
         where: {
           plan: workflowPlanScope,
-          status: { in: ['PENDING', 'IN_PROGRESS'] },
-          deadline: { lt: now },
+          ...dashboardOverdueNodeWhere(now),
         },
         distinct: ['planId'],
         select: { planId: true },

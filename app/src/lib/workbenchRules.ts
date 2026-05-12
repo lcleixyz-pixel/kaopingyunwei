@@ -259,6 +259,26 @@ export function summarizeProspects(candidates: ProspectRow[] = []): ProspectSumm
   return summary;
 }
 
+export function getDisplayTenantName(input: {
+  tenantName?: string | null;
+  userTenantName?: string | null;
+  fallback?: string;
+}): string {
+  return input.tenantName?.trim()
+    || input.userTenantName?.trim()
+    || input.fallback
+    || '总部';
+}
+
+export function getProspectSummarySource<T extends ProspectRow>(input: {
+  allCandidates?: T[];
+  visibleCandidates?: T[];
+}): T[] {
+  return input.allCandidates?.length
+    ? input.allCandidates
+    : input.visibleCandidates || [];
+}
+
 export function getCurrentNode(nodes: WorkbenchNode[] = [], now = new Date()): WorkbenchNode | undefined {
   return orderNodes(nodes, now).find((node) => node.status === 'IN_PROGRESS')
     || orderNodes(nodes, now).find((node) => node.status !== 'COMPLETED' && node.status !== 'SKIPPED');

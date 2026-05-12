@@ -79,6 +79,11 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// ─── API 兜底 ───
+app.use('/api', (_req, res) => {
+  error(res, 'NOT_FOUND', '接口不存在', 404);
+});
+
 // ─── 前端路由回退 ───
 app.get('*', (_req, res) => {
   res.sendFile(path.join(frontendDist, 'index.html'));

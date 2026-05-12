@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { deriveBranchWorkbenchTasks } from '../../../lib/workbenchRules.js';
+import {
+  deriveBranchWorkbenchTasks,
+  getDisplayTenantName,
+  getProspectSummarySource,
+  summarizeProspects,
+} from '../../../lib/workbenchRules.js';
 
 describe('branch workbench priority tasks', () => {
   it('does not create multiple priority cards for a plan that is only in registration', () => {
@@ -69,5 +74,28 @@ describe('branch workbench priority tasks', () => {
     });
 
     assert.equal(tasks[0]?.id, 'score-recording');
+  });
+});
+
+describe('workbench display helpers', () => {
+  it('uses the authenticated tenant from the store before falling back to the user payload', () => {
+    assert.equal(getDisplayTenantName({ tenantName: '全量测试分支机构', userTenantName: undefined }), '全量测试分支机构');
+    assert.equal(getDisplayTenantName({ tenantName: undefined, userTenantName: '旧机构字段' }), '旧机构字段');
+    assert.equal(getDisplayTenantName({}), '总部');
+  });
+
+  it('summarizes prospects from the full candidate list when a status filter is active', () => {
+    const visibleCandidates = [{ id: 'p1', phone: '13800000001', status: 'FOLLOWING' as const }];
+    const allCandidates = [
+      ...visibleCandidates,
+      { id: 'p2', phone: '13800000002', status: 'CONVERTED' as const },
+      { id: 'p3', phone: '13800000002', status: 'NOT_INTERESTED' as const },
+    ];
+
+    const summary = summarizeProspects(getProspectSummarySource({ allCandidates, visibleCandidates }));
+
+    assert.equal(summary.total, 3);
+    assert.equal(summary.converted, 1);
+    assert.deepEqual(summary.duplicatePhones, ['13800000002']);
   });
 });

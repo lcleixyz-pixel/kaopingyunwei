@@ -6,7 +6,8 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { authenticate } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
-import { canReadAcrossTenants, nestedPublishedPlanWhereForRead } from '../services/accessScope.js';
+import { nestedPublishedPlanWhereForRead } from '../services/accessScope.js';
+import { shouldScopeRemindersToCurrentUser } from '../services/reminderVisibility.js';
 
 const router = Router();
 
@@ -19,7 +20,7 @@ router.get('/', async (req, res) => {
       node: nestedPublishedPlanWhereForRead(req),
     };
 
-    if (!canReadAcrossTenants(req.userRole) && req.userRole !== 'BRANCH_ADMIN') {
+    if (shouldScopeRemindersToCurrentUser(req.userRole)) {
       where.userId = req.userId;
     }
     if (status && status !== 'ALL') {
@@ -55,7 +56,7 @@ router.get('/count', async (req, res) => {
       node: nestedPublishedPlanWhereForRead(req),
     };
 
-    if (!canReadAcrossTenants(req.userRole) && req.userRole !== 'BRANCH_ADMIN') {
+    if (shouldScopeRemindersToCurrentUser(req.userRole)) {
       where.userId = req.userId;
     }
 
@@ -83,7 +84,7 @@ router.patch('/:id/read', async (req, res) => {
       return;
     }
 
-    if (reminder.userId !== req.userId && !canReadAcrossTenants(req.userRole) && req.userRole !== 'BRANCH_ADMIN') {
+    if (reminder.userId !== req.userId && shouldScopeRemindersToCurrentUser(req.userRole)) {
       error(res, 'FORBIDDEN', '无权限处理该提醒', 403);
       return;
     }
