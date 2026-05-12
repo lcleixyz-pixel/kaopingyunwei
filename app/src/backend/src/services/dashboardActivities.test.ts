@@ -18,6 +18,18 @@ describe('dashboard activity formatting', () => {
     assert.equal(activity.userName, '总部管理员');
   });
 
+  it('labels certificate destroy close events as destroy confirmation', () => {
+    const activity = formatDashboardActivity({
+      id: 'log-destroy',
+      action: 'CERTIFICATE_DESTROY_BATCH_CLOSE',
+      target: 'CertificateDestroyBatch',
+      targetId: 'destroy-123456',
+      createdAt: new Date('2026-05-12T08:00:00.000Z'),
+    });
+
+    assert.equal(activity.title, '确认销毁批次');
+  });
+
   it('does not expose unknown internal action or target codes', () => {
     const activity = formatDashboardActivity({
       id: 'log-2',

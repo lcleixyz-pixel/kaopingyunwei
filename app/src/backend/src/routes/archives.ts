@@ -3,7 +3,6 @@
 // ═══════════════════════════════════════════════════
 
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Router, type Request, type Response } from 'express';
@@ -17,6 +16,7 @@ import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
 import { decrypt, sha256 } from '../utils/crypto.js';
 import { recordAudit } from '../utils/audit.js';
+import { applyPdfFont, PdfFontMissingError, requireChinesePdfFont } from '../utils/pdfFonts.js';
 import { publishedPlanWhereForRead } from '../services/accessScope.js';
 import {
   ARCHIVE_REPORT_HEADERS,
@@ -761,8 +761,7 @@ function sendPdf(
     res.setHeader('Content-Disposition', encodeContentDisposition(filename));
     res.send(Buffer.concat(chunks));
   });
-  const fontPath = findChineseFontPath();
-  if (fontPath) doc.font(fontPath);
+  applyPdfFont(doc, requireChinesePdfFont());
   render(doc);
   doc.end();
 }
@@ -860,18 +859,6 @@ function drawCell(
   });
 }
 
-function findChineseFontPath(): string | null {
-  const candidates = [
-    '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
-    '/System/Library/Fonts/PingFang.ttc',
-    '/System/Library/Fonts/Hiragino Sans GB.ttc',
-    '/System/Library/Fonts/STHeiti Medium.ttc',
-    '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-    '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
-  ];
-  return candidates.find((candidate) => existsSync(candidate)) || null;
-}
-
 function parseSummarySnapshot(value?: string | null): ArchiveSummaryRow[] {
   if (!value) return [];
   try {
@@ -917,6 +904,10 @@ function encodeContentDisposition(filename: string): string {
 
 function handleRouteError(res: Response, err: unknown, fallbackMessage: string): void {
   if (err instanceof RouteError) {
+    error(res, err.code, err.message, err.statusCode);
+    return;
+  }
+  if (err instanceof PdfFontMissingError) {
     error(res, err.code, err.message, err.statusCode);
     return;
   }
