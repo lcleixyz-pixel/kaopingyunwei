@@ -1,0 +1,89 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create source package
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='app/node_modules' \
+            --exclude='app/dist' \
+            --exclude='app/data' \
+            -czf kaopingyunwei-release.tar.gz .
+
+      - name: Upload package to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: kaopingyunwei-release.tar.gz
+          target: /var/tmp
+
+      - name: Deploy on server
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            DEPLOY_DIR="/root/exam-deploy"
+            SOURCE_DIR="/www/wwwroot/kaopingyunwei"
+            PACKAGE="/var/tmp/kaopingyunwei-release.tar.gz"
+            DATA_DIR="/var/lib/docker/volumes/docker_exam-data/_data"
+            BACKUP_DIR="${DEPLOY_DIR}/backup"
+            TS="$(date +%Y%m%d_%H%M%S)"
+
+            test -f "${PACKAGE}"
+            test -f "${DEPLOY_DIR}/.env"
+            test -f "${DEPLOY_DIR}/docker-compose.yml"
+            test -f "${DATA_DIR}/fonts/Kaiti.ttc"
+
+            mkdir -p "${BACKUP_DIR}" "${SOURCE_DIR}"
+            if [ -f "${DATA_DIR}/exam.db" ]; then
+              cp "${DATA_DIR}/exam.db" "${BACKUP_DIR}/exam.db.before_actions_${TS}"
+            fi
+
+            find "${SOURCE_DIR}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+            tar -xzf "${PACKAGE}" -C "${SOURCE_DIR}"
+
+            cd "${DEPLOY_DIR}"
+            docker compose --env-file .env config >/tmp/exam-compose-check.yml
+            docker compose --env-file .env build
+            docker compose --env-file .env up -d
+
+            for i in $(seq 1 24); do
+              if curl -fsS http://127.0.0.1:8080/api/health >/tmp/exam-health.json; then
+                cat /tmp/exam-health.json
+                break
+              fi
+              sleep 5
+              if [ "$i" = "24" ]; then
+                docker compose --env-file .env ps
+                docker compose --env-file .env logs --tail=120
+                exit 1
+              fi
+            done
+
+            docker exec exam-backend node --input-type=module -e 'import { requireChinesePdfFont } from "./src/backend/dist/utils/pdfFonts.js"; console.log(JSON.stringify(requireChinesePdfFont()));'
+            docker image prune -f
