@@ -21,12 +21,14 @@ jobs:
 
       - name: Create source package
         run: |
+          mkdir -p .deploy-artifact
           tar \
             --exclude='.git' \
+            --exclude='.deploy-artifact' \
             --exclude='app/node_modules' \
             --exclude='app/dist' \
             --exclude='app/data' \
-            -czf kaopingyunwei-release.tar.gz .
+            -czf .deploy-artifact/kaopingyunwei-release.tar.gz .
 
       - name: Upload package to server
         uses: appleboy/scp-action@v0.1.7
@@ -34,8 +36,9 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: kaopingyunwei-release.tar.gz
+          source: .deploy-artifact/kaopingyunwei-release.tar.gz
           target: /var/tmp
+          strip_components: 1
 
       - name: Deploy on server
         uses: appleboy/ssh-action@v1.2.2
