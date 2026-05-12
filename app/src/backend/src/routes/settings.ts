@@ -10,6 +10,7 @@ import { success, error } from '../utils/response.js';
 import { recordAudit } from '../utils/audit.js';
 import { canReadAcrossTenants } from '../services/accessScope.js';
 import { parseDateArray } from '../services/workdayCalendars.js';
+import { SETTINGS_READ_ROLES, SETTINGS_WRITE_ROLES } from '../services/settingsAccess.js';
 
 const router = Router();
 
@@ -37,7 +38,7 @@ const workdayCalendarSchema = z.object({
   workdays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).default([]),
 });
 
-router.get('/', async (_req, res) => {
+router.get('/', requireRoles(...SETTINGS_READ_ROLES), async (_req, res) => {
   try {
     const rows = await prisma.config.findMany();
     success(res, buildSettings(rows));
@@ -47,7 +48,7 @@ router.get('/', async (_req, res) => {
   }
 });
 
-router.patch('/', requireRoles('SYS_ADMIN', 'HQ_ADMIN'), async (req, res) => {
+router.patch('/', requireRoles(...SETTINGS_WRITE_ROLES), async (req, res) => {
   try {
     const result = settingsSchema.safeParse(req.body);
     if (!result.success) {

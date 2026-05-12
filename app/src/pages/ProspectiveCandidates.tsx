@@ -4,7 +4,7 @@ import { useApi } from '@/hooks/useApi';
 import { EDUCATION_OPTIONS, getWorkTypesForOccupation, LEVEL_OPTIONS, normalizeLevelLabel, OCCUPATION_OPTIONS, type ConvertProspectiveCandidateResponse, type ExamPlan, type ProspectiveCandidate, type ProspectiveCandidateStatus } from '@/shared';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/dateUtils';
-import { summarizeProspects } from '@/lib/workbenchRules';
+import { getProspectSummarySource, summarizeProspects } from '@/lib/workbenchRules';
 
 interface ProspectForm {
   name: string;
@@ -64,6 +64,7 @@ export default function ProspectiveCandidates() {
   const { get, post, patch, del } = useApi();
   const { user } = useAuthStore();
   const [candidates, setCandidates] = useState<ProspectiveCandidate[]>([]);
+  const [allCandidates, setAllCandidates] = useState<ProspectiveCandidate[]>([]);
   const [plans, setPlans] = useState<ExamPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,7 +78,10 @@ export default function ProspectiveCandidates() {
   const [convertForm, setConvertForm] = useState<ConvertForm>(emptyConvertForm);
 
   const canDelete = user?.role === 'BRANCH_ADMIN';
-  const summary = useMemo(() => summarizeProspects(candidates), [candidates]);
+  const summary = useMemo(
+    () => summarizeProspects(getProspectSummarySource({ allCandidates, visibleCandidates: candidates })),
+    [allCandidates, candidates],
+  );
   const publishedPlans = useMemo(
     () => plans.filter((plan) => plan.status === 'PUBLISHED' && !plan.registrationClosed),
     [plans],
@@ -92,7 +96,12 @@ export default function ProspectiveCandidates() {
       const params: Record<string, string> = {};
       if (searchQuery) params.search = searchQuery;
       if (statusFilter !== 'ALL') params.status = statusFilter;
-      setCandidates(await get<ProspectiveCandidate[]>('/prospective-candidates', params));
+      const [visibleCandidates, summaryCandidates] = await Promise.all([
+        get<ProspectiveCandidate[]>('/prospective-candidates', params),
+        get<ProspectiveCandidate[]>('/prospective-candidates'),
+      ]);
+      setCandidates(visibleCandidates);
+      setAllCandidates(summaryCandidates);
     } catch (err) {
       setError(getErrorMessage(err, '获取意向考生失败'));
     } finally {
@@ -158,7 +167,7 @@ export default function ProspectiveCandidates() {
   const handleSave = async () => {
     if (!form.name.trim() || !form.phone.trim()) return;
 
-    const duplicate = candidates.find((candidate) => (
+    const duplicate = allCandidates.find((candidate) => (
       candidate.phone === form.phone.trim() && candidate.id !== editingCandidate?.id
     ));
     if (duplicate && !window.confirm(`重复手机号提醒：${form.phone.trim()} 已存在于「${duplicate.name}」。仍然保存会保留两条线索，请确认是否继续。`)) return;
