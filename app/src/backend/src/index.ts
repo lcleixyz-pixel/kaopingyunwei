@@ -99,7 +99,10 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 const PORT = config.PORT;
 
 validateProductionSecrets();
-ensureOperationalDirectories(config);
+ensureOperationalDirectories({
+  BACKUP_DIR: config.BACKUP_DIR,
+  LOG_DIR: config.LOG_DIR,
+});
 
 app.listen(PORT, () => {
   console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);

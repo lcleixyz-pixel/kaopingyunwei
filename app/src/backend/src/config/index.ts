@@ -74,7 +74,10 @@ export function validateProductionSecrets(): void {
 }
 
 export function ensureOperationalDirectories(values: OperationalDirectoryConfig): void {
-  for (const [name, dir] of Object.entries(values)) {
+  for (const [name, dir] of [
+    ['BACKUP_DIR', values.BACKUP_DIR],
+    ['LOG_DIR', values.LOG_DIR],
+  ] as const) {
     fs.mkdirSync(dir, { recursive: true });
     fs.accessSync(dir, fs.constants.R_OK | fs.constants.W_OK);
     const stat = fs.statSync(dir);
