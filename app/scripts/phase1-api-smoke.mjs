@@ -1,13 +1,15 @@
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3001/api';
+const HQ_TENANT_CODE = process.env.HQ_TENANT_CODE || 'NGTCS0013';
+const BRANCH_TENANT_CODE = process.env.BRANCH_TENANT_CODE || 'BJ001';
 const LEVEL3_WORK_YEARS_CONDITION = '累计从事本职业或相关职业工作满10年。';
 const LEVEL3_WORK_YEARS_MATERIAL_KEY = 'condition_level3_1_work_years_10_commitment_social_security';
 
 async function main() {
   const unique = Date.now();
-  const sys = await login({ username: 'admin', password: 'admin123', tenantCode: 'HQ001' });
-  const branch = await login({ username: 'bjadmin', password: 'bjadmin123', tenantCode: 'BJ001' });
-  const branchStaff = await login({ username: 'bjstaff', password: 'bjstaff123', tenantCode: 'BJ001' });
-  const hq = await login({ username: 'hqadmin', password: 'hqadmin123', tenantCode: 'HQ001' });
+  const sys = await login({ username: 'admin', password: 'admin123', tenantCode: HQ_TENANT_CODE });
+  const branch = await login({ username: 'bjadmin', password: 'bjadmin123', tenantCode: BRANCH_TENANT_CODE });
+  const branchStaff = await login({ username: 'bjstaff', password: 'bjstaff123', tenantCode: BRANCH_TENANT_CODE });
+  const hq = await login({ username: 'hqadmin', password: 'hqadmin123', tenantCode: HQ_TENANT_CODE });
 
   const examDate = new Date();
   examDate.setDate(examDate.getDate() + 45);
@@ -31,8 +33,8 @@ async function main() {
   });
   assertEqual(plan.status, 'DRAFT', 'plan should be created as draft');
 
-  const draftNodes = await api(`/exam-nodes?planId=${plan.id}`, { token: branch.token });
-  assertEqual(draftNodes.length, 9, 'draft plan should pre-generate 9 nodes');
+  const draftPlan = await api(`/exam-plans/${plan.id}`, { token: branch.token });
+  assertEqual(draftPlan.nodes.length, 9, 'draft plan should pre-generate 9 nodes');
 
   await expectApiFailure('/candidates', {
     method: 'POST',

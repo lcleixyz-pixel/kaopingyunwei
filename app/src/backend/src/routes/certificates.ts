@@ -25,7 +25,7 @@ import { recordAudit } from '../utils/audit.js';
 import { decrypt } from '../utils/crypto.js';
 import { addWorkDaysWithCalendar } from '../utils/dateUtils.js';
 import { getWorkdayCalendarConfig } from '../services/workdayCalendars.js';
-import { planTenantWhereForRead, tenantWhereForRead } from '../services/accessScope.js';
+import { publishedPlanWhereForRead, tenantWhereForRead } from '../services/accessScope.js';
 import {
   buildCertificateImportPreview,
   canReadCertificateAcrossTenants,
@@ -232,7 +232,7 @@ router.get('/', async (req, res) => {
 router.get('/plans', async (req, res) => {
   try {
     const plans = await prisma.examPlan.findMany({
-      where: planTenantWhereForRead(req),
+      where: publishedPlanWhereForRead(req),
       orderBy: { examDate: 'desc' },
       include: {
         tenant: { select: { id: true, code: true, name: true, type: true } },
@@ -289,7 +289,7 @@ router.get('/records', async (req, res) => {
     }
 
     const plan = await prisma.examPlan.findFirst({
-      where: { id: planId, ...planTenantWhereForRead(req) },
+      where: { id: planId, ...publishedPlanWhereForRead(req) },
       select: { id: true },
     });
 
@@ -1855,7 +1855,7 @@ async function buildImportPreviewForPlan(req: Request, planId: string, rows: Cer
   const plan = await prisma.examPlan.findFirst({
     where: {
       id: planId,
-      ...(req.userRole === 'SYS_ADMIN' ? {} : planTenantWhereForRead(req)),
+      ...publishedPlanWhereForRead(req),
     },
     select: { id: true },
   });

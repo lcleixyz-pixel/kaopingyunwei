@@ -18,39 +18,61 @@ async function seed(): Promise<void> {
   // 1. 创建总部租户
   const hq = await prisma.tenant.create({
     data: {
-      code: 'HQ001',
-      name: '总部',
+      code: 'NGTCS0013',
+      name: '北京总部',
       type: 'HQ',
       status: 'ACTIVE',
-      contactName: '系统管理员',
-      contactPhone: '13800138000',
+      contactName: '总部管理员',
+      address: '北京',
     },
   });
   console.log(`✅ 创建总部租户: ${hq.name}`);
 
-  // 2. 创建分支机构（示例）
-  const branch1 = await prisma.tenant.create({
+  // 2. 创建考评运营机构：北京总部自营 + 三个分支
+  const beijingOps = await prisma.tenant.create({
     data: {
       code: 'BJ001',
-      name: '北京分部',
+      name: '北京考评中心',
       type: 'BRANCH',
       status: 'ACTIVE',
-      contactName: '北京管理员',
-      contactPhone: '13800138001',
+      contactName: '北京考评管理员',
+      address: '北京',
     },
   });
 
-  const branch2 = await prisma.tenant.create({
+  const shenzhen = await prisma.tenant.create({
     data: {
-      code: 'SH001',
-      name: '上海分部',
+      code: 'SZ001',
+      name: '深圳分支机构',
       type: 'BRANCH',
       status: 'ACTIVE',
-      contactName: '上海管理员',
-      contactPhone: '13800138002',
+      contactName: '深圳管理员',
+      address: '深圳',
     },
   });
-  console.log(`✅ 创建分支机构: ${branch1.name}, ${branch2.name}`);
+
+  const xinjiang = await prisma.tenant.create({
+    data: {
+      code: 'XJ001',
+      name: '新疆分支机构',
+      type: 'BRANCH',
+      status: 'ACTIVE',
+      contactName: '新疆管理员',
+      address: '新疆',
+    },
+  });
+
+  const yunnan = await prisma.tenant.create({
+    data: {
+      code: 'YN001',
+      name: '云南分支机构',
+      type: 'BRANCH',
+      status: 'ACTIVE',
+      contactName: '云南管理员',
+      address: '云南',
+    },
+  });
+  console.log(`✅ 创建考评运营机构: ${beijingOps.name}, ${shenzhen.name}, ${xinjiang.name}, ${yunnan.name}`);
 
   // 3. 创建系统管理员
   const admin = await prisma.user.create({
@@ -60,8 +82,7 @@ async function seed(): Promise<void> {
       password: await hashPassword('admin123'),
       realName: '系统管理员',
       role: 'SYS_ADMIN',
-      phone: '13800138000',
-      email: 'admin@exam.local',
+      email: 'admin@ngtcs0013.local',
       status: 'ACTIVE',
     },
   });
@@ -75,58 +96,137 @@ async function seed(): Promise<void> {
       password: await hashPassword('hqadmin123'),
       realName: '总部管理员',
       role: 'HQ_ADMIN',
-      phone: '13800138003',
+      email: 'hqadmin@ngtcs0013.local',
       status: 'ACTIVE',
     },
   });
   console.log(`✅ 创建总部管理员: ${hqAdmin.username}`);
 
-  // 5. 创建分部管理员和工作人员
-  const bjAdmin = await prisma.user.create({
+  const hqStaff = await prisma.user.create({
     data: {
-      tenantId: branch1.id,
-      username: 'bjadmin',
-      password: await hashPassword('bjadmin123'),
-      realName: '北京管理员',
-      role: 'BRANCH_ADMIN',
-      phone: '13800138004',
+      tenantId: hq.id,
+      username: 'hqstaff',
+      password: await hashPassword('hqstaff123'),
+      realName: '总部工作人员',
+      role: 'HQ_STAFF',
+      email: 'hqstaff@ngtcs0013.local',
       status: 'ACTIVE',
     },
   });
+  console.log(`✅ 创建总部工作人员: ${hqStaff.username}`);
 
-  const shAdmin = await prisma.user.create({
+  // 5. 创建北京自营和分支管理员、工作人员
+  const bjAdmin = await prisma.user.create({
     data: {
-      tenantId: branch2.id,
-      username: 'shadmin',
-      password: await hashPassword('shadmin123'),
-      realName: '上海管理员',
+      tenantId: beijingOps.id,
+      username: 'bjadmin',
+      password: await hashPassword('bjadmin123'),
+      realName: '北京考评管理员',
       role: 'BRANCH_ADMIN',
-      phone: '13800138005',
+      email: 'bjadmin@ngtcs0013.local',
       status: 'ACTIVE',
     },
   });
 
   const bjStaff = await prisma.user.create({
     data: {
-      tenantId: branch1.id,
+      tenantId: beijingOps.id,
       username: 'bjstaff',
       password: await hashPassword('bjstaff123'),
-      realName: '北京工作人员',
+      realName: '北京考评工作人员',
       role: 'BRANCH_STAFF',
-      phone: '13800138006',
+      email: 'bjstaff@ngtcs0013.local',
       status: 'ACTIVE',
     },
   });
-  console.log(`✅ 创建分部账号: ${bjAdmin.username}, ${shAdmin.username}, ${bjStaff.username}`);
+
+  const szAdmin = await prisma.user.create({
+    data: {
+      tenantId: shenzhen.id,
+      username: 'szadmin',
+      password: await hashPassword('szadmin123'),
+      realName: '深圳管理员',
+      role: 'BRANCH_ADMIN',
+      email: 'szadmin@ngtcs0013.local',
+      status: 'ACTIVE',
+    },
+  });
+
+  const szStaff = await prisma.user.create({
+    data: {
+      tenantId: shenzhen.id,
+      username: 'szstaff',
+      password: await hashPassword('szstaff123'),
+      realName: '深圳工作人员',
+      role: 'BRANCH_STAFF',
+      email: 'szstaff@ngtcs0013.local',
+      status: 'ACTIVE',
+    },
+  });
+
+  const xjAdmin = await prisma.user.create({
+    data: {
+      tenantId: xinjiang.id,
+      username: 'xjadmin',
+      password: await hashPassword('xjadmin123'),
+      realName: '新疆管理员',
+      role: 'BRANCH_ADMIN',
+      email: 'xjadmin@ngtcs0013.local',
+      status: 'ACTIVE',
+    },
+  });
+
+  const xjStaff = await prisma.user.create({
+    data: {
+      tenantId: xinjiang.id,
+      username: 'xjstaff',
+      password: await hashPassword('xjstaff123'),
+      realName: '新疆工作人员',
+      role: 'BRANCH_STAFF',
+      email: 'xjstaff@ngtcs0013.local',
+      status: 'ACTIVE',
+    },
+  });
+
+  const ynAdmin = await prisma.user.create({
+    data: {
+      tenantId: yunnan.id,
+      username: 'ynadmin',
+      password: await hashPassword('ynadmin123'),
+      realName: '云南管理员',
+      role: 'BRANCH_ADMIN',
+      email: 'ynadmin@ngtcs0013.local',
+      status: 'ACTIVE',
+    },
+  });
+
+  const ynStaff = await prisma.user.create({
+    data: {
+      tenantId: yunnan.id,
+      username: 'ynstaff',
+      password: await hashPassword('ynstaff123'),
+      realName: '云南工作人员',
+      role: 'BRANCH_STAFF',
+      email: 'ynstaff@ngtcs0013.local',
+      status: 'ACTIVE',
+    },
+  });
+  console.log(`✅ 创建考评运营账号: ${bjAdmin.username}, ${bjStaff.username}, ${szAdmin.username}, ${szStaff.username}, ${xjAdmin.username}, ${xjStaff.username}, ${ynAdmin.username}, ${ynStaff.username}`);
 
   console.log('\n🎉 数据库初始化完成！');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('  默认登录账号：');
   console.log('  • 系统管理员: admin / admin123');
   console.log('  • 总部管理员: hqadmin / hqadmin123');
-  console.log('  • 北京分部: bjadmin / bjadmin123');
-  console.log('  • 北京工作人员: bjstaff / bjstaff123');
-  console.log('  • 上海分部: shadmin / shadmin123');
+  console.log('  • 总部工作人员: hqstaff / hqstaff123');
+  console.log('  • 北京考评管理员: bjadmin / bjadmin123');
+  console.log('  • 北京考评工作人员: bjstaff / bjstaff123');
+  console.log('  • 深圳管理员: szadmin / szadmin123');
+  console.log('  • 深圳工作人员: szstaff / szstaff123');
+  console.log('  • 新疆管理员: xjadmin / xjadmin123');
+  console.log('  • 新疆工作人员: xjstaff / xjstaff123');
+  console.log('  • 云南管理员: ynadmin / ynadmin123');
+  console.log('  • 云南工作人员: ynstaff / ynstaff123');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 

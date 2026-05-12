@@ -59,6 +59,30 @@ export interface User {
   updatedAt?: string;
 }
 
+export interface UserManagementOptions {
+  tenants: Pick<Tenant, 'id' | 'code' | 'name' | 'type' | 'status'>[];
+  roles: UserRole[];
+}
+
+export interface CreateUserInput {
+  tenantId: string;
+  username: string;
+  realName: string;
+  role: UserRole;
+  phone?: string | null;
+  email?: string | null;
+  password: string;
+  status?: UserStatus;
+}
+
+export interface UpdateUserInput {
+  realName?: string;
+  role?: UserRole;
+  phone?: string | null;
+  email?: string | null;
+  status?: UserStatus;
+}
+
 // ─── 考评计划 ───
 export type PlanStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'PUBLISHED' | 'CANCELLED';
 
@@ -726,6 +750,11 @@ export interface DashboardStats {
   completedPlans: number;
   overdueNodes: number;
   pendingNodes: number;
+  draftPlans?: number;
+  publishedPlans?: number;
+  preExamPlans?: number;
+  postExamPlans?: number;
+  riskPlans?: number;
   pendingReminders?: number;
   totalCandidates: number;
   totalBranches: number;

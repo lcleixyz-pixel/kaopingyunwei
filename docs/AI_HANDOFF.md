@@ -126,6 +126,24 @@ Phase 1.3 节点追踪与报名阶段关闭：
 
 ## 最近验证结果
 
+2026-05-12 投产验收回归：
+
+- 当前可用本地环境为 Vite 前端 `http://localhost:3000` + Express API `http://localhost:3001/api`；`GET /api/health` 返回 200。
+- Docker daemon 当前不可用，`docker compose --env-file .env -f docker/docker-compose.yml ps` 报 Colima socket 不存在，因此本轮未执行容器启动验收。
+- `npm run backend:test`：通过，21 个 suite、81 个测试。
+- `npm run check`：通过；前端 Vite 构建和后端 TypeScript 编译均通过。构建仍提示单个 JS chunk 约 940 kB，属于上线前性能优化项。
+- `npm run lint`：通过。
+- `npx prisma migrate status --schema src/backend/prisma/schema.prisma`：通过，10 个 migrations，schema 与数据库一致。
+- `docker compose -f docker/docker-compose.yml config`：通过。
+- 修复 `scripts/phase1-api-smoke.mjs` 与当前 seed 的脱节：总部租户默认编码从旧 `HQ001` 改为 `NGTCS0013`，并支持 `HQ_TENANT_CODE`、`BRANCH_TENANT_CODE` 环境变量覆盖；草稿计划 9 节点断言改为通过 `/api/exam-plans/:id` 读取计划详情，避免误用只展示已发布计划的节点追踪接口。
+- `API_BASE_URL=http://localhost:3001/api npm run phase1:smoke`：通过；覆盖计划创建、9 节点、草稿阻断、发布、意向转正式、报名资料、导出 `.xls`、上传回填关闭报名、总部报表、回退和取消闭环。
+- API 权限抽测：未登录 `/api/dashboard` 返回 401；总部访问 `/api/prospective-candidates` 返回 403；分支工作人员删除意向考生返回 403；北京分部读取新疆计划详情返回 404；北京分部修改全局 `/api/settings` 返回 403。
+- 浏览器验收 `http://localhost:3000`：系统管理员打开仪表盘、考评计划、节点追踪、报名资料、成绩管理、证书管理、档案管理、AI 运维、系统设置均非白屏，无框架错误层，console error/warn 为空。
+- 浏览器角色验收：`bjadmin/bjadmin123` 可见“意向考生”，默认“跟进中”，报名资料工作台显示“缴费”列；`bjstaff/bjstaff123` 不可见系统设置，直接访问 `/settings` 回到工作台，意向考生页无删除入口；`hqadmin/hqadmin123` 和 `admin/admin123` 直接访问 `/prospective-candidates` 回到工作台，报名资料工作台不显示“缴费”列。
+- 浏览器交互验收：总部报名资料工作台选择已发布计划后，统计卡片和空状态正确刷新，表头无“缴费”列。
+- 移动视口 390x844 抽测分支工作人员仪表盘：页面非白屏，无框架错误层，console error/warn 为空。
+- 观察到一个角色策略口径差异：`BRANCH_ADMIN` 可进入“系统设置”的“工作日历”页并维护本分支工作日历，后端也允许 `PATCH /settings/workday-calendars`；但 `docs/ROLE_MATRIX.md` 的 MVP 页面权限仍写着分支管理员系统设置“不开放”。需要后续明确这是设计变更还是文档需同步。
+
 2026-05-11 生产验收测试：
 
 - 已清理宿主机本地 SQLite `app/data/exam.db` 并重新执行 Prisma migration + seed；清理后为 3 个租户、5 个默认账号、0 条计划/考生/意向考生/证书/审计业务记录。

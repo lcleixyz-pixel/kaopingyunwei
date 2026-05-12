@@ -115,11 +115,17 @@ export function deriveBranchWorkbenchTasks(input: BranchWorkbenchInput): Workben
   const planSummary = getPlanStageSummary(plans, now);
   const overdueNodes = nodes.filter((node) => isNodeOverdue(node, now));
   const inProgressNodes = nodes.filter((node) => node.status === 'IN_PROGRESS' && !isNodeOverdue(node, now));
+  const genericInProgressNodes = inProgressNodes.filter((node) => (
+    node.nodeType !== 'REGISTRATION'
+    && node.nodeType !== 'SCORE_RECORD'
+  ));
   const scoreRecordNodes = nodes.filter((node) => (
     node.nodeType === 'SCORE_RECORD'
-    && node.status !== 'COMPLETED'
-    && node.status !== 'SKIPPED'
+    && node.status === 'IN_PROGRESS'
   ));
+  const genericInProgressCount = nodes.length > 0
+    ? genericInProgressNodes.length
+    : (stats?.pendingNodes || 0);
   const tasks: WorkbenchTask[] = [];
 
   if (overdueNodes.length > 0 || (stats?.overdueNodes || 0) > 0) {
@@ -161,29 +167,33 @@ export function deriveBranchWorkbenchTasks(input: BranchWorkbenchInput): Workben
     });
   }
 
-  if (planSummary.registrationOpen > 0) {
+  const regularRegistrationOpen = Math.max(
+    planSummary.registrationOpen - planSummary.registrationClosingSoon,
+    0
+  );
+  if (regularRegistrationOpen > 0) {
     tasks.push({
       id: 'registration-open',
       title: '推进报名资料',
-      description: `当前 ${planSummary.registrationOpen} 个计划仍可报名，可继续从意向考生转正式并整理资料。`,
+      description: `当前 ${regularRegistrationOpen} 个计划仍可报名，可继续从意向考生转正式并整理资料。`,
       href: '/candidates',
       actionLabel: '继续处理',
       tone: 'primary',
       priority: 40,
-      count: planSummary.registrationOpen,
+      count: regularRegistrationOpen,
     });
   }
 
-  if (inProgressNodes.length > 0 || (stats?.pendingNodes || 0) > 0) {
+  if (genericInProgressCount > 0) {
     tasks.push({
       id: 'in-progress-nodes',
       title: '跟进进行中节点',
-      description: `还有 ${Math.max(inProgressNodes.length, stats?.pendingNodes || 0)} 个节点需要持续跟进。`,
+      description: `还有 ${genericInProgressCount} 个节点需要持续跟进。`,
       href: '/nodes',
       actionLabel: '看时间线',
       tone: 'neutral',
       priority: 50,
-      count: Math.max(inProgressNodes.length, stats?.pendingNodes || 0),
+      count: genericInProgressCount,
     });
   }
 

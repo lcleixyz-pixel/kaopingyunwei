@@ -4,7 +4,13 @@
 
 import cron from 'node-cron';
 import { prisma } from '../lib/prisma.js';
-import config from '../config/index.js';
+import {
+  getReminderPolicy,
+  getOperationalSettings,
+  type OperationalSettings,
+  shouldRunDailyBackup,
+  toLocalDateKey,
+} from '../services/operationalSettings.js';
 
 // 提醒规则定义
 const REMINDER_RULES: Record<string, { beforeDays: number; message: string }[]> = {
@@ -24,29 +30,28 @@ const REMINDER_RULES: Record<string, { beforeDays: number; message: string }[]> 
  */
 export function initializeScheduler(): void {
   console.log('🕐 定时任务调度器已启动');
+  let lastAutoBackupDateKey: string | null = null;
 
-  // 每分钟检查一次节点状态（逾期检测 + 提醒生成）
+  // 每分钟检查一次节点状态、提醒生成和按配置触发自动备份
   cron.schedule('*/1 * * * *', async () => {
     try {
+      const settings = await getOperationalSettings();
       await checkOverdueNodes();
-      await generateReminders();
+
+      if (settings.reminderEnabled) {
+        await generateReminders(settings);
+      }
+
+      const now = new Date();
+      if (shouldRunDailyBackup(now, settings, lastAutoBackupDateKey)) {
+        console.log('🔄 执行自动备份...');
+        await performAutoBackup(settings.backupRetentionDays);
+        lastAutoBackupDateKey = toLocalDateKey(now);
+      }
     } catch (err) {
-      console.error('Reminder job error:', err);
+      console.error('Scheduler job error:', err);
     }
   });
-
-  // 每天凌晨2点自动备份
-  if (config.AUTO_BACKUP_ENABLED) {
-    const [hour, minute] = config.AUTO_BACKUP_TIME.split(':');
-    cron.schedule(`${minute} ${hour} * * *`, async () => {
-      try {
-        console.log('🔄 执行自动备份...');
-        await performAutoBackup();
-      } catch (err) {
-        console.error('Auto backup error:', err);
-      }
-    });
-  }
 
   // 每天凌晨3点清理临时文件
   cron.schedule('0 3 * * *', async () => {
@@ -86,9 +91,10 @@ async function checkOverdueNodes(): Promise<void> {
 /**
  * 生成提醒
  */
-async function generateReminders(): Promise<void> {
+async function generateReminders(settings: OperationalSettings): Promise<void> {
   const now = new Date();
-  const reminderWindow = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+  const policy = getReminderPolicy(settings.reminderIntensity);
+  const reminderWindow = new Date(now.getTime() + policy.lookaheadDays * 24 * 60 * 60 * 1000);
 
   // 查找即将到期或已经逾期且未完成的已发布节点
   const upcomingNodes = await prisma.examNode.findMany({
@@ -103,7 +109,7 @@ async function generateReminders(): Promise<void> {
       },
       reminders: {
         where: {
-          createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+          createdAt: { gte: new Date(now.getTime() - policy.cooldownHours * 60 * 60 * 1000) },
         },
       },
     },
@@ -115,7 +121,8 @@ async function generateReminders(): Promise<void> {
     const type = hoursRemaining < 0 ? 'NODE_OVERDUE' : 'NODE_DEADLINE';
 
     for (const rule of rules) {
-      if (hoursRemaining < 0 || hoursRemaining <= rule.beforeDays * 24) {
+      const beforeDays = rule.beforeDays > 0 ? rule.beforeDays + policy.advanceDayBoost : rule.beforeDays;
+      if (hoursRemaining < 0 || hoursRemaining <= beforeDays * 24) {
         const recipients = await prisma.user.findMany({
           where: {
             tenantId: node.plan.tenantId,
@@ -151,7 +158,7 @@ async function generateReminders(): Promise<void> {
 /**
  * 自动备份
  */
-async function performAutoBackup(): Promise<void> {
+async function performAutoBackup(retentionDays: number): Promise<void> {
   const fs = await import('fs/promises');
   const path = await import('path');
 
@@ -168,7 +175,6 @@ async function performAutoBackup(): Promise<void> {
   console.log(`✅ 自动备份完成: ${backupPath}`);
 
   // 清理过期备份
-  const retentionDays = config.BACKUP_RETENTION_DAYS;
   const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
 
   const files = await fs.readdir(backupDir);

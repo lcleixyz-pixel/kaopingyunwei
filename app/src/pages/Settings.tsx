@@ -1,48 +1,45 @@
-import { Settings as SettingsIcon, Shield, Bell, Database, Loader2, CalendarDays } from 'lucide-react';
+import { Bell, CalendarDays, CheckCircle2, Database, Loader2, Settings as SettingsIcon, UserCog } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
 import type { WorkdayCalendar } from '@/shared';
 import { useAuthStore } from '@/stores/authStore';
+import { UserManagementPanel } from '@/components/settings/UserManagementPanel';
 
-type TabId = 'general' | 'security' | 'notifications' | 'workdays' | 'backup';
+type TabId = 'accounts' | 'notifications' | 'workdays' | 'backup';
 
 interface SettingsForm {
-  systemName: string;
-  organizationName: string;
-  dataRetentionYears: string;
   autoBackupTime: string;
   backupRetentionDays: string;
   autoBackupEnabled: string;
   reminderEnabled: string;
-  emailEnabled: string;
+  reminderIntensity: string;
 }
 
 const tabs = [
-  { id: 'general' as TabId, label: '通用设置', icon: SettingsIcon },
-  { id: 'security' as TabId, label: '安全设置', icon: Shield },
+  { id: 'accounts' as TabId, label: '账号管理', icon: UserCog },
   { id: 'notifications' as TabId, label: '提醒设置', icon: Bell },
   { id: 'workdays' as TabId, label: '工作日历', icon: CalendarDays },
   { id: 'backup' as TabId, label: '备份设置', icon: Database },
 ];
 
 const defaultSettings: SettingsForm = {
-  systemName: '考评分支机构管理系统',
-  organizationName: 'XX职业技能鉴定中心',
-  dataRetentionYears: '8',
   autoBackupTime: '02:00',
   backupRetentionDays: '30',
   autoBackupEnabled: 'true',
   reminderEnabled: 'true',
-  emailEnabled: 'false',
+  reminderIntensity: 'ENHANCED',
 };
 
 export default function Settings() {
   const { get, patch } = useApi();
   const { user } = useAuthStore();
   const isBranchAdmin = user?.role === 'BRANCH_ADMIN';
-  const visibleTabs = isBranchAdmin ? tabs.filter((tab) => tab.id === 'workdays') : tabs;
-  const [activeTab, setActiveTab] = useState<TabId>(isBranchAdmin ? 'workdays' : 'general');
+  const canManageAccounts = user?.role === 'SYS_ADMIN' || user?.role === 'HQ_ADMIN';
+  const visibleTabs = isBranchAdmin
+    ? tabs.filter((tab) => tab.id === 'workdays')
+    : tabs.filter((tab) => tab.id !== 'accounts' || canManageAccounts);
+  const [activeTab, setActiveTab] = useState<TabId>(isBranchAdmin ? 'workdays' : canManageAccounts ? 'accounts' : 'workdays');
   const [settings, setSettings] = useState<SettingsForm>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -71,6 +68,15 @@ export default function Settings() {
 
   const update = (key: keyof SettingsForm, value: string) => {
     setSettings((current) => ({ ...current, [key]: value }));
+  };
+
+  const applyRecommendedBackupSettings = () => {
+    setSettings((current) => ({
+      ...current,
+      autoBackupEnabled: 'true',
+      autoBackupTime: '02:00',
+      backupRetentionDays: '30',
+    }));
   };
 
   const save = async () => {
@@ -150,38 +156,17 @@ export default function Settings() {
             </div>
           ) : (
             <>
-              {activeTab === 'general' && (
-                <div className="space-y-6">
-                  <h3 className="text-lg font-bold text-slate-900">通用设置</h3>
-                  <div className="space-y-4 max-w-lg">
-                    <Field label="系统名称">
-                      <input className={inputClass} value={settings.systemName} onChange={(e) => update('systemName', e.target.value)} />
-                    </Field>
-                    <Field label="机构名称">
-                      <input className={inputClass} value={settings.organizationName} onChange={(e) => update('organizationName', e.target.value)} />
-                    </Field>
-                    <Field label="数据保留年限">
-                      <select className={inputClass} value={settings.dataRetentionYears} onChange={(e) => update('dataRetentionYears', e.target.value)}>
-                        <option value="5">5年</option>
-                        <option value="8">8年</option>
-                        <option value="10">10年</option>
-                      </select>
-                    </Field>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'security' && (
-                <Panel title="安全设置">
-                  <InfoRow title="登录失败锁定" description="连续5次失败锁定30分钟" enabled />
-                  <InfoRow title="会话超时" description="JWT 默认7天有效，后续可扩展为无操作超时" enabled />
-                </Panel>
-              )}
+              {activeTab === 'accounts' && <UserManagementPanel />}
 
               {activeTab === 'notifications' && (
                 <Panel title="提醒设置">
-                  <ToggleRow title="系统内消息提醒" description="在系统内显示节点提醒" value={settings.reminderEnabled} onChange={(value) => update('reminderEnabled', value)} />
-                  <ToggleRow title="邮件提醒" description="通过邮件发送节点提醒" value={settings.emailEnabled} onChange={(value) => update('emailEnabled', value)} />
+                  <ToggleRow title="系统内消息提醒" description="关闭后不再生成新的节点到期/逾期提醒" value={settings.reminderEnabled} onChange={(value) => update('reminderEnabled', value)} />
+                  <Field label="提醒强度">
+                    <select className={inputClass} value={settings.reminderIntensity} onChange={(e) => update('reminderIntensity', e.target.value)}>
+                      <option value="ENHANCED">加强：提前最多3天，12小时内不重复</option>
+                      <option value="STANDARD">标准：提前最多2天，24小时内不重复</option>
+                    </select>
+                  </Field>
                 </Panel>
               )}
 
@@ -214,6 +199,20 @@ export default function Settings() {
                 <div className="space-y-6">
                   <h3 className="text-lg font-bold text-slate-900">备份设置</h3>
                   <div className="space-y-4 max-w-lg">
+                    <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                      <div className="flex items-start justify-between gap-3">
+                        <p>推荐：每日 02:00 自动备份，保留 30 天。当前总部 + 分支规模下，这个策略足够稳妥，也不会堆积太多本地备份。</p>
+                        <button
+                          type="button"
+                          onClick={applyRecommendedBackupSettings}
+                          className="shrink-0 inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          应用
+                        </button>
+                      </div>
+                    </div>
+                    <ToggleRow title="启用自动备份" description="按下方时间每天自动备份数据" value={settings.autoBackupEnabled} onChange={(value) => update('autoBackupEnabled', value)} />
                     <Field label="自动备份时间">
                       <input type="time" className={inputClass} value={settings.autoBackupTime} onChange={(e) => update('autoBackupTime', e.target.value)} />
                     </Field>
@@ -224,21 +223,22 @@ export default function Settings() {
                         <option value="90">90天</option>
                       </select>
                     </Field>
-                    <ToggleRow title="启用自动备份" description="每天凌晨自动备份数据" value={settings.autoBackupEnabled} onChange={(value) => update('autoBackupEnabled', value)} />
                   </div>
                 </div>
               )}
 
-              <div className="mt-6 pt-6 border-t border-slate-100">
-                <button
-                  onClick={activeTab === 'workdays' ? saveCalendar : save}
-                  disabled={isSaving}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg font-medium transition-colors inline-flex items-center gap-2"
-                >
-                  {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {isSaving ? '保存中...' : activeTab === 'workdays' ? '保存工作日历' : '保存设置'}
-                </button>
-              </div>
+              {activeTab !== 'accounts' && (
+                <div className="mt-6 pt-6 border-t border-slate-100">
+                  <button
+                    onClick={activeTab === 'workdays' ? saveCalendar : save}
+                    disabled={isSaving}
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg font-medium transition-colors inline-flex items-center gap-2"
+                  >
+                    {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {isSaving ? '保存中...' : activeTab === 'workdays' ? '保存工作日历' : '保存设置'}
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -270,20 +270,6 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
     <div className="space-y-6">
       <h3 className="text-lg font-bold text-slate-900">{title}</h3>
       <div className="space-y-4 max-w-lg">{children}</div>
-    </div>
-  );
-}
-
-function InfoRow({ title, description, enabled }: { title: string; description: string; enabled: boolean }) {
-  return (
-    <div className="flex items-center justify-between py-3 border-b border-slate-100">
-      <div>
-        <p className="font-medium text-slate-800">{title}</p>
-        <p className="text-sm text-slate-500">{description}</p>
-      </div>
-      <span className={`text-xs px-2 py-1 rounded-full ${enabled ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-        {enabled ? '启用' : '停用'}
-      </span>
     </div>
   );
 }

@@ -26,6 +26,7 @@ import remindersRouter from './routes/reminders.js';
 import settingsRouter from './routes/settings.js';
 import exportTemplatesRouter from './routes/export-templates.js';
 import hqRouter from './routes/hq.js';
+import usersRouter from './routes/users.js';
 
 const app = express();
 
@@ -67,6 +68,7 @@ app.use('/api/reminders', remindersRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/export-templates', exportTemplatesRouter);
 app.use('/api/hq', hqRouter);
+app.use('/api/users', usersRouter);
 
 // ─── 健康检查 ───
 app.get('/api/health', (_req, res) => {
