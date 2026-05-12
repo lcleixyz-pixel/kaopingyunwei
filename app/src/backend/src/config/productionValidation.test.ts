@@ -72,4 +72,17 @@ describe('production config validation', () => {
     assert.equal(fs.statSync(backupDir).isDirectory(), true);
     assert.equal(fs.statSync(logDir).isDirectory(), true);
   });
+
+  it('only treats backup and log paths as operational directories', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'exam-config-'));
+    const backupDir = path.join(root, 'backups');
+    const logDir = path.join(root, 'logs');
+
+    assert.doesNotThrow(() => ensureOperationalDirectories({
+      BACKUP_DIR: backupDir,
+      LOG_DIR: logDir,
+      PORT: 3001,
+      NODE_ENV: 'production',
+    } as any));
+  });
 });
