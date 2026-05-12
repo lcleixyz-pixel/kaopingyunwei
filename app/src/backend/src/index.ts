@@ -7,7 +7,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import path from 'path';
-import config, { validateProductionSecrets } from './config/index.js';
+import config, { ensureOperationalDirectories, validateProductionSecrets } from './config/index.js';
 import { error } from './utils/response.js';
 import { initializeScheduler } from './jobs/scheduler.js';
 
@@ -99,6 +99,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 const PORT = config.PORT;
 
 validateProductionSecrets();
+ensureOperationalDirectories(config);
 
 app.listen(PORT, () => {
   console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);

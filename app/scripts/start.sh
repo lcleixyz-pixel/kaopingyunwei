@@ -47,7 +47,7 @@ fi
 
 # 创建数据目录
 echo "📁 创建数据目录..."
-mkdir -p data/files data/backups data/temp
+mkdir -p data/files data/backups data/logs data/temp
 
 # 构建并启动
 echo "🐳 构建并启动 Docker 容器..."

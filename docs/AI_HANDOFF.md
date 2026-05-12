@@ -15,13 +15,13 @@
 
 ## 当前日期
 
-记录日期：2026-05-09
+记录日期：2026-05-12
 
 ## 当前阶段
 
-项目正在推进 Phase 1.2：意向考生模块与考评计划字段重梳。
+项目已进入云服务器部署准备阶段。当前部署基线为 Docker Compose + SQLite + 宝塔/Nginx 反向代理；MVP 不迁移 PostgreSQL，不接入大模型运维。
 
-当前应继续聚焦“分支提前收集意向考生、报备计划、整理正式考生资料、总部追踪进度、导出地方系统报表”闭环，不要扩散到学员端、大模型运维、邮件短信、附件上传或完整成绩证书档案流程。
+服务器已安装宝塔 Linux 面板且已有两个轻量静态网站，因此本系统部署时不应直接占用公网 `80/443`，推荐 `.env` 使用 `EXAM_PORT=127.0.0.1:8080`，再由宝塔按域名反向代理到 `http://127.0.0.1:8080`。
 
 ## 最近完成内容
 
@@ -63,6 +63,10 @@
   - `docs/ACCEPTANCE_CHECKLIST.md`
   - `docs/AI_HANDOFF.md`
   - `docs/DECISIONS.md`
+- 新增云服务器部署准入文档：
+  - `docs/DEPLOYMENT_CLOUD.md`
+- 已将 `app/README.md`、`app/.env.example`、`docs/ACCEPTANCE_CHECKLIST.md` 和 `docs/ROLE_MATRIX.md` 同步到当前云部署口径。
+- 顶层 `SKILL.md` 和 `exam-system/SKILL.md` 已标注为包含早期架构示例；Docker/云服务器/宝塔/备份恢复以 `docs/DEPLOYMENT_CLOUD.md` 和 `app/docker/docker-compose.yml` 为准。
 
 Phase 1.1：
 

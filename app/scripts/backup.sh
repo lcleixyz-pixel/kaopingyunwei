@@ -7,7 +7,7 @@ set -e
 
 echo "🔄 开始备份..."
 
-BACKUP_DIR="./data/backups"
+BACKUP_DIR="${BACKUP_DIR:-./data/backups}"
 DB_FILE="./data/exam.db"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_NAME="backup_${TIMESTAMP}"

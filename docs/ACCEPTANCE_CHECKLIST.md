@@ -172,8 +172,9 @@ npm run backend:start
 如果机器具备 Docker：
 
 ```bash
-docker compose -f docker/docker-compose.yml config
-docker compose -f docker/docker-compose.yml up --build
+docker compose --env-file .env -f docker/docker-compose.yml config
+docker compose --env-file .env -f docker/docker-compose.yml up -d --build
+curl http://127.0.0.1:${EXAM_PORT:-80}/api/health
 ```
 
 通过标准：
@@ -182,6 +183,7 @@ docker compose -f docker/docker-compose.yml up --build
 - 后端容器启动并完成 seed。
 - 前端可访问。
 - 默认账号可登录。
+- 如果云服务器已有宝塔或其他网站，确认 `.env` 中 `EXAM_PORT` 未占用公网 `80/443`，推荐使用 `127.0.0.1:8080` 并通过宝塔反向代理。
 
 如果当前机器没有 `docker` 命令，必须在交接文档中明确记录未验收原因。
 
