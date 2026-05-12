@@ -20,7 +20,7 @@ RUN npm run backend:build
 
 FROM node:20-alpine
 
-RUN apk add --no-cache openssl sqlite tar
+RUN apk add --no-cache openssl sqlite tar fontconfig font-noto-cjk && fc-cache -f
 
 WORKDIR /app
 
@@ -33,7 +33,7 @@ COPY src/backend/prisma ./src/backend/prisma
 RUN npx prisma generate --schema=src/backend/prisma/schema.prisma
 
 # 创建数据目录
-RUN mkdir -p /app/data /app/data/files /app/data/backups /app/data/logs /app/data/temp
+RUN mkdir -p /app/data /app/data/files /app/data/fonts /app/data/backups /app/data/logs /app/data/temp
 
 # 暴露端口
 EXPOSE 3001

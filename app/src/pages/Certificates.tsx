@@ -568,10 +568,11 @@ export default function Certificates() {
     }, '销毁批次已创建');
   };
 
-  const closeDestroyBatch = async (id: string) => {
+  const confirmDestroyBatch = async (id: string) => {
+    if (!window.confirm('确认该批次证书已实际销毁并入账？确认后不可重复确认。')) return;
     await withSubmit(async () => {
-      await post(`/certificates/destroy-batches/${id}/close`, {});
-    }, '销毁批次已关闭');
+      await post(`/certificates/destroy-batches/${id}/confirm-destroy`, {});
+    }, '销毁批次已确认销毁');
   };
 
   const submitReissue = async () => {
@@ -825,7 +826,7 @@ export default function Certificates() {
                   isSubmitting={isSubmitting}
                   onSubmitVoid={submitVoidRecord}
                   onCreateDestroy={createDestroyBatch}
-                  onCloseDestroy={closeDestroyBatch}
+                  onConfirmDestroy={confirmDestroyBatch}
                   onExportDestroy={(id) => downloadFile(`/certificates/exports/destroy-batch/${id}.pdf`, `证书销毁登记表-${id}.pdf`)}
                 />
               )}
@@ -1339,7 +1340,7 @@ function VoidDestroySection(props: {
   isSubmitting: boolean;
   onSubmitVoid: () => void;
   onCreateDestroy: () => void;
-  onCloseDestroy: (id: string) => void;
+  onConfirmDestroy: (id: string) => void;
   onExportDestroy: (id: string) => void;
 }) {
   return (
@@ -1399,11 +1400,11 @@ function VoidDestroySection(props: {
           headers={['批次', '状态', '记录数', '创建时间', '操作']}
           rows={props.destroyBatches.map((batch) => [
             batch.title,
-            batch.status === 'CLOSED' ? '已关闭' : '草稿',
+            batch.status === 'CLOSED' ? '已确认销毁' : '草稿',
             batch.voidRecords?.length || 0,
             formatDateTime(batch.createdAt),
             <div key={batch.id} className="flex flex-wrap gap-2">
-              {props.isHeadquartersOperator && batch.status === 'DRAFT' && <ActionLink onClick={() => props.onCloseDestroy(batch.id)}>关闭</ActionLink>}
+              {props.isHeadquartersOperator && batch.status === 'DRAFT' && <ActionLink onClick={() => props.onConfirmDestroy(batch.id)}>确认销毁</ActionLink>}
               <ActionLink onClick={() => props.onExportDestroy(batch.id)}>打印表</ActionLink>
             </div>,
           ])}
