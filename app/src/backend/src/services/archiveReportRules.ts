@@ -96,6 +96,10 @@ export function buildArchiveSummaryRows(certificates: ArchiveCertificateLike[]):
   return Array.from(rows.values());
 }
 
+export function buildArchiveBatchDataType(): string {
+  return '新增';
+}
+
 export function validateArchiveBatchDraft(input: {
   batchNo?: string | null;
   planTenantIds: string[];

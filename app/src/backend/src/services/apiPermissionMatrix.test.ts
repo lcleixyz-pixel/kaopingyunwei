@@ -66,5 +66,14 @@ describe('API permission matrix', () => {
         ['BRANCH_STAFF', true],
       ]
     );
+    assert.deepEqual(
+      roles.map((role) => [role, canAccessApiArea(role, 'pdfTemplates')]),
+      [
+        ['SYS_ADMIN', true],
+        ['HQ_ADMIN', true],
+        ['BRANCH_ADMIN', true],
+        ['BRANCH_STAFF', true],
+      ]
+    );
   });
 });

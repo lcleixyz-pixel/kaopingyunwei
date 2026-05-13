@@ -53,10 +53,12 @@ router.get('/reports/registration-progress', async (req, res) => {
           }),
         );
         const materials = normalizeMaterials(parseJson(candidate.registrationProfile?.materialsJson));
+        materials.photo = Boolean(candidate.photo);
         const gate = validateRegistrationGate({
           registrationFields: fields,
           materials,
           candidateStatus: candidate.status,
+          photoUploaded: Boolean(candidate.photo),
         });
 
         return {

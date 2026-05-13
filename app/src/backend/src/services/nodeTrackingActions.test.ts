@@ -8,8 +8,8 @@ import type { NodeType } from '../../../shared/index.js';
 
 describe('node tracking actions', () => {
   it('allows direct completion only for offline confirmation nodes', () => {
-    const completable: NodeType[] = ['ROOM_ARRANGE', 'EXAM_PREPARE', 'EXAM_DAY', 'SCORE_PUBLISH', 'COMPLETE'];
-    const businessEntryNodes: NodeType[] = ['PLAN_CREATE', 'REGISTRATION', 'SCORE_RECORD', 'CERT_MANAGE'];
+    const completable: NodeType[] = ['ROOM_ARRANGE', 'EXAM_PREPARE', 'EXAM_DAY', 'SCORE_PUBLISH'];
+    const businessEntryNodes: NodeType[] = ['PLAN_CREATE', 'REGISTRATION', 'SCORE_RECORD', 'CERT_MANAGE', 'COMPLETE'];
 
     for (const nodeType of completable) {
       assert.equal(canCompleteNodeFromTracking(nodeType), true, nodeType);
@@ -39,6 +39,11 @@ describe('node tracking actions', () => {
       type: 'navigate',
       label: '进入证书管理',
       href: '/certificates',
+    });
+    assert.deepEqual(getNodeTrackingPrimaryAction('COMPLETE'), {
+      type: 'navigate',
+      label: '进入档案管理',
+      href: '/archives',
     });
   });
 

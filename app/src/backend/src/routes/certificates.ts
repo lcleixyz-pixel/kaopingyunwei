@@ -26,6 +26,12 @@ import { addWorkDaysWithCalendar } from '../utils/dateUtils.js';
 import { applyPdfFont, PdfFontMissingError, requireCertificatePrintFont, requireChinesePdfFont } from '../utils/pdfFonts.js';
 import { getWorkdayCalendarConfig } from '../services/workdayCalendars.js';
 import { publishedPlanWhereForRead, tenantWhereForRead } from '../services/accessScope.js';
+import { resolvePdfTemplateDefinition, type CertificatePrintTemplateDefinition, type StandardPdfTemplateDefinition } from '../services/pdfTemplates.js';
+import {
+  pdfDocumentOptionsFromTemplate,
+  renderCertificatePrintTemplate,
+  renderStandardPdfTemplate,
+} from '../services/pdfTemplateRenderer.js';
 import {
   buildCertificateImportPreview,
   canReadCertificateAcrossTenants,
@@ -49,7 +55,20 @@ const router = Router();
 router.use(authenticate);
 
 const dataFilesDir = path.resolve(process.cwd(), 'data/files');
+const privateDataDir = path.resolve(process.cwd(), 'data', 'private');
 const certificateUploadDir = path.join(dataFilesDir, 'certificates');
+const certificatePhotoPrintField: CertificatePrintTemplateDefinition['fields'][number] = {
+  id: 'photo',
+  type: 'image',
+  label: '证件照',
+  source: 'candidate.photo',
+  xMm: 35,
+  yMm: 60,
+  widthMm: 25,
+  heightMm: 35,
+  fontSize: 10,
+  align: 'center',
+};
 
 const importUpload = multer({
   storage: multer.memoryStorage(),
@@ -1397,7 +1416,8 @@ router.get('/exports/supply-request-template.pdf', async (req, res) => {
       notes: normalizeText(req.query.notes),
       requestedAt: new Date(),
     };
-    sendPdf(res, `空白证书证书壳申请表.pdf`, (doc) => renderSupplyRequestPdf(doc, request));
+    const template = await getStandardPdfTemplate('CERT_SUPPLY_REQUEST');
+    sendPdf(res, `空白证书证书壳申请表.pdf`, (doc) => renderSupplyRequestPdf(doc, request, template), pdfDocumentOptionsFromTemplate(template));
   } catch (err) {
     handleRouteError(res, err, '生成申领 PDF 失败');
   }
@@ -1415,7 +1435,8 @@ router.get('/exports/supply-request/:id.pdf', async (req, res) => {
       return;
     }
 
-    sendPdf(res, `证书申领单-${request.id}.pdf`, (doc) => renderSupplyRequestPdf(doc, request));
+    const template = await getStandardPdfTemplate('CERT_SUPPLY_REQUEST');
+    sendPdf(res, `证书申领单-${request.id}.pdf`, (doc) => renderSupplyRequestPdf(doc, request, template), pdfDocumentOptionsFromTemplate(template));
   } catch (err) {
     console.error('Export supply request error:', err);
     error(res, 'INTERNAL_ERROR', '导出证书申领单失败', 500);
@@ -1540,7 +1561,8 @@ router.get('/exports/print-record/:id/signature.pdf', async (req, res) => {
       orderBy: { updatedAt: 'asc' },
       include: certificateInclude(),
     });
-    sendPdf(res, `证书领取签字表-${record.id}.pdf`, (doc) => renderPrintSignaturePdf(doc, record, certificates));
+    const template = await getStandardPdfTemplate('CERT_PRINT_SIGNATURE');
+    sendPdf(res, `证书领取签字表-${record.id}.pdf`, (doc) => renderPrintSignaturePdf(doc, record, certificates, template), pdfDocumentOptionsFromTemplate(template));
   } catch (err) {
     handleRouteError(res, err, '生成证书领取签字表失败');
   }
@@ -1562,11 +1584,19 @@ router.get('/exports/print-record/:id/certificates.pdf', async (req, res) => {
       include: certificateInclude(),
     });
     const calibration = parseCertificatePrintCalibration(req);
+    const template = await getCertificatePrintTemplate();
+    const missingPhotos = await getMissingCertificatePrintPhotos(certificates);
+    if (missingPhotos.length > 0) {
+      error(res, 'MISSING_CANDIDATE_PHOTOS', `以下考生缺少证件照：${missingPhotos.map((item) => item.name).join('、')}`, 400, JSON.stringify({
+        candidates: missingPhotos,
+      }));
+      return;
+    }
     sendPdf(
       res,
       `证书套打-${record.id}.pdf`,
-      (doc) => renderCertificatePrintPdf(doc, certificates, calibration),
-      { layout: 'landscape', margin: 0 },
+      (doc) => renderCertificatePrintPdf(doc, certificates, calibration, template),
+      pdfDocumentOptionsFromTemplate(template),
     );
   } catch (err) {
     handleRouteError(res, err, '生成证书套打 PDF 失败');
@@ -1596,11 +1626,12 @@ router.get('/exports/certificate-print-trial.pdf', async (req, res) => {
       return;
     }
     const calibration = parseCertificatePrintCalibration(req);
+    const template = await getCertificatePrintTemplate();
     sendPdf(
       res,
       `证书套打试打-${certificate.candidate.name}.pdf`,
-      (doc) => renderCertificatePrintPdf(doc, [certificate], calibration),
-      { layout: 'landscape', margin: 0 },
+      (doc) => renderCertificatePrintPdf(doc, [certificate], calibration, template),
+      pdfDocumentOptionsFromTemplate(template),
     );
   } catch (err) {
     handleRouteError(res, err, '生成证书套打试打 PDF 失败');
@@ -1620,7 +1651,8 @@ router.get('/exports/destroy-batch/:id.pdf', async (req, res) => {
       error(res, 'NOT_FOUND', '销毁批次不存在', 404);
       return;
     }
-    sendPdf(res, `证书销毁登记表-${batch.id}.pdf`, (doc) => renderDestroyBatchPdf(doc, batch));
+    const template = await getStandardPdfTemplate('CERT_DESTROY_BATCH');
+    sendPdf(res, `证书销毁登记表-${batch.id}.pdf`, (doc) => renderDestroyBatchPdf(doc, batch, template), pdfDocumentOptionsFromTemplate(template));
   } catch (err) {
     handleRouteError(res, err, '生成销毁登记表失败');
   }
@@ -2261,6 +2293,55 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+async function getMissingCertificatePrintPhotos(
+  certificates: Array<{ id: string; candidate: { name: string; idCard: string; photo?: string | null } }>,
+): Promise<Array<{ id: string; name: string; idCard: string }>> {
+  const missing: Array<{ id: string; name: string; idCard: string }> = [];
+  for (const certificate of certificates) {
+    const photoPath = certificate.candidate.photo;
+    if (!photoPath) {
+      missing.push({ id: certificate.id, name: certificate.candidate.name, idCard: safeDecrypt(certificate.candidate.idCard) });
+      continue;
+    }
+    try {
+      await fs.access(resolvePrivateCandidatePhotoPath(photoPath));
+    } catch {
+      missing.push({ id: certificate.id, name: certificate.candidate.name, idCard: safeDecrypt(certificate.candidate.idCard) });
+    }
+  }
+  return missing;
+}
+
+function resolvePrivateCandidatePhotoPath(relativePath: string): string {
+  const resolved = path.resolve(privateDataDir, relativePath);
+  if (!resolved.startsWith(`${privateDataDir}${path.sep}`)) {
+    throw new RouteError('INVALID_PHOTO_PATH', '证件照路径不合法', 500);
+  }
+  return resolved;
+}
+
+async function getStandardPdfTemplate(key: 'CERT_SUPPLY_REQUEST' | 'CERT_PRINT_SIGNATURE' | 'CERT_DESTROY_BATCH'): Promise<StandardPdfTemplateDefinition> {
+  const template = await resolvePdfTemplateDefinition(prisma.pdfTemplate, key);
+  if (template.kind !== 'standard') {
+    throw new RouteError('PDF_TEMPLATE_INVALID', 'PDF 打印模板类型不匹配', 500);
+  }
+  return template;
+}
+
+async function getCertificatePrintTemplate(): Promise<CertificatePrintTemplateDefinition> {
+  const template = await resolvePdfTemplateDefinition(prisma.pdfTemplate, 'CERTIFICATE_PRINT');
+  if (template.kind !== 'certificate-print') {
+    throw new RouteError('PDF_TEMPLATE_INVALID', '证书套打模板类型不匹配', 500);
+  }
+  if (!template.fields.some((field) => field.type === 'image' && field.source === 'candidate.photo')) {
+    return {
+      ...template,
+      fields: [certificatePhotoPrintField, ...template.fields],
+    };
+  }
+  return template;
+}
+
 function renderSupplyRequestPdf(
   doc: PDFKit.PDFDocument,
   request: {
@@ -2273,55 +2354,49 @@ function renderSupplyRequestPdf(
     mailingAddress?: string | null;
     notes?: string | null;
     requestedAt: Date;
-  }
+  },
+  template: StandardPdfTemplateDefinition,
 ): void {
-  renderPdfTitle(doc, '空白职业技能等级证书、证书壳申请表');
-  renderPdfRows(doc, [
-    ['申请单位', request.tenant.name],
-    ['申请时间', formatDateOnly(request.requestedAt)],
-    ['申请空白证书数量', String(request.blankCertQuantity || 0)],
-    ['申请证书壳数量', String(request.shellQuantity || 0)],
-    ['责任人', request.responsiblePerson || ''],
-    ['联系人', request.contactName || ''],
-    ['联系电话', request.contactPhone || request.tenant.contactPhone || ''],
-    ['邮寄地址', request.mailingAddress || request.tenant.address || ''],
-    ['备注', request.notes || ''],
-  ]);
-  doc.moveDown(2);
-  doc.fontSize(12).text('分支机构确认：', { continued: false });
-  doc.moveDown(2);
-  doc.text('负责人签字：____________________        单位盖章：____________________');
+  renderStandardPdfTemplate(doc, template, {
+    tenant: { name: request.tenant.name },
+    requestedAt: formatDateOnly(request.requestedAt),
+    blankCertQuantity: request.blankCertQuantity || 0,
+    shellQuantity: request.shellQuantity || 0,
+    responsiblePerson: request.responsiblePerson || '',
+    contactName: request.contactName || '',
+    contactPhone: request.contactPhone || request.tenant.contactPhone || '',
+    mailingAddress: request.mailingAddress || request.tenant.address || '',
+    notes: request.notes || '',
+  });
 }
 
 function renderPrintSignaturePdf(
   doc: PDFKit.PDFDocument,
   record: { plan: { title: string; occupation: string; profession: string; level: string }; responsiblePerson: string; actualPrintedCount: number; createdAt: Date },
-  certificates: Array<{ certNo: string; certDisplayIssueDate: Date | null; candidate: { name: string; idCard: string } }>
+  certificates: Array<{ certNo: string; certDisplayIssueDate: Date | null; candidate: { name: string; idCard: string } }>,
+  template: StandardPdfTemplateDefinition,
 ): void {
-  renderPdfTitle(doc, '职业技能等级证书领取签字记录');
-  doc.fontSize(11).text(`考评计划：${record.plan.title}`);
-  doc.text(`职业/工种/等级：${record.plan.occupation} / ${record.plan.profession} / ${record.plan.level}`);
-  doc.text(`打印责任人：${record.responsiblePerson}    实际打印数量：${record.actualPrintedCount}    日期：${formatDateOnly(record.createdAt)}`);
-  doc.moveDown();
-  renderPdfTable(doc, ['姓名', '证件号码', '证书编号', '版面发证日期', '领取签字'], certificates.map((certificate) => [
-    certificate.candidate.name,
-    safeDecrypt(certificate.candidate.idCard),
-    certificate.certNo,
-    formatDateOnly(certificate.certDisplayIssueDate),
-    '',
-  ]));
+  renderStandardPdfTemplate(doc, template, {
+    plan: {
+      title: record.plan.title,
+      displayName: `${record.plan.occupation} / ${record.plan.profession} / ${record.plan.level}`,
+    },
+    record: {
+      responsiblePerson: record.responsiblePerson,
+      actualPrintedCount: record.actualPrintedCount,
+      createdAt: formatDateOnly(record.createdAt),
+    },
+    certificates: certificates.map((certificate) => ({
+      candidate: {
+        name: certificate.candidate.name,
+        idCard: safeDecrypt(certificate.candidate.idCard),
+      },
+      certNo: certificate.certNo,
+      certDisplayIssueDate: formatDateOnly(certificate.certDisplayIssueDate),
+      signatureBlank: '',
+    })),
+  });
 }
-
-const certificatePrintFields = {
-  name: { x: 544.25, y: 191.6, width: 198.4, height: 34, size: 14, font: 'regular' },
-  idType: { x: 544.25, y: 227.9, width: 198.4, height: 34, size: 14, font: 'regular' },
-  idCard: { x: 544.25, y: 266.45, width: 198.4, height: 34, size: 14, font: 'regular' },
-  occupation: { x: 544.25, y: 302.15, width: 198.4, height: 34, size: 14, font: 'regular' },
-  profession: { x: 544.25, y: 339, width: 198.4, height: 34, size: 14, font: 'regular' },
-  level: { x: 544.25, y: 377, width: 198.4, height: 34, size: 14, font: 'regular' },
-  certNo: { x: 544.25, y: 415, width: 198.4, height: 34, size: 14, font: 'regular' },
-  date: { x: 584.8, y: 486.15, width: 114.4, height: 22.85, size: 12, font: 'regular' },
-} as const;
 
 interface CertificatePrintCalibration {
   offsetX: number;
@@ -2337,105 +2412,53 @@ function renderCertificatePrintPdf(
     candidate: {
       name: string;
       idCard: string;
+      photo?: string | null;
       plan: { occupation: string; profession: string; level: string };
     };
   }>,
   calibration: CertificatePrintCalibration,
+  template: CertificatePrintTemplateDefinition,
 ): void {
   const certificateFont = requireCertificatePrintFont();
   applyPdfFont(doc, certificateFont);
-  certificates.forEach((certificate, index) => {
-    if (index > 0) doc.addPage({ size: 'A4', layout: 'landscape', margin: 0 });
-    applyPdfFont(doc, certificateFont);
-    drawTemplateField(doc, certificatePrintFields.name, certificate.candidate.name, calibration);
-    drawTemplateField(doc, certificatePrintFields.idType, '居民身份证', calibration);
-    drawTemplateField(doc, certificatePrintFields.idCard, safeDecrypt(certificate.candidate.idCard), calibration);
-    drawTemplateField(doc, certificatePrintFields.occupation, certificate.candidate.plan.occupation, calibration);
-    drawTemplateField(doc, certificatePrintFields.profession, certificate.candidate.plan.profession, calibration);
-    drawTemplateField(doc, certificatePrintFields.level, certificate.candidate.plan.level, calibration);
-    drawTemplateField(doc, certificatePrintFields.certNo, certificate.certNo, calibration);
-    drawTemplateField(doc, certificatePrintFields.date, formatCertificatePrintDate(certificate.certDisplayIssueDate), calibration);
-  });
-}
-
-function drawTemplateField(
-  doc: PDFKit.PDFDocument,
-  field: { x: number; y: number; width: number; height: number; size: number },
-  value: string,
-  calibration: CertificatePrintCalibration,
-): void {
-  const text = value || '';
-  let fontSize = field.size * calibration.fontScale;
-  while (fontSize > 8 && doc.fontSize(fontSize).widthOfString(text) > field.width - 4) {
-    fontSize -= 1;
-  }
-  const textHeight = doc.fontSize(fontSize).heightOfString(text, { width: field.width });
-  doc
-    .fontSize(fontSize)
-    .text(text, field.x + calibration.offsetX, field.y + calibration.offsetY + Math.max(0, (field.height - textHeight) / 2), {
-      width: field.width,
-      height: field.height,
-      align: 'center',
-      lineBreak: false,
-    });
+  renderCertificatePrintTemplate(
+    doc,
+    template,
+    certificates.map((certificate) => ({
+      candidate: {
+        name: certificate.candidate.name,
+        idCard: safeDecrypt(certificate.candidate.idCard),
+        photo: certificate.candidate.photo ? resolvePrivateCandidatePhotoPath(certificate.candidate.photo) : '',
+        plan: certificate.candidate.plan,
+      },
+      idTypeLabel: '居民身份证',
+      certNo: certificate.certNo,
+      certDisplayIssueDate: formatCertificatePrintDate(certificate.certDisplayIssueDate),
+    })),
+    calibration,
+  );
 }
 
 function renderDestroyBatchPdf(
   doc: PDFKit.PDFDocument,
-  batch: { title: string; responsiblePerson: string | null; notes: string | null; createdAt: Date; voidRecords: Array<{ tenant: { name: string }; plan?: { title: string } | null; itemType: CertificateItemType; quantity: number; reason: string }> }
+  batch: { title: string; responsiblePerson: string | null; notes: string | null; createdAt: Date; voidRecords: Array<{ tenant: { name: string }; plan?: { title: string } | null; itemType: CertificateItemType; quantity: number; reason: string }> },
+  template: StandardPdfTemplateDefinition,
 ): void {
-  renderPdfTitle(doc, '职业技能等级证书作废销毁登记表');
-  doc.fontSize(11).text(`销毁批次：${batch.title}`);
-  doc.text(`责任人：${batch.responsiblePerson || ''}    创建时间：${formatDateOnly(batch.createdAt)}`);
-  if (batch.notes) doc.text(`备注：${batch.notes}`);
-  doc.moveDown();
-  renderPdfTable(doc, ['机构', '计划', '物品', '数量', '作废原因'], batch.voidRecords.map((record) => [
-    record.tenant.name,
-    record.plan?.title || '',
-    itemTypeLabel(record.itemType),
-    String(record.quantity),
-    record.reason,
-  ]));
-  doc.moveDown(2);
-  doc.text('销毁负责人签字：____________________        监督人签字：____________________');
-}
-
-function renderPdfTitle(doc: PDFKit.PDFDocument, title: string): void {
-  doc.fontSize(18).text(title, { align: 'center' });
-  doc.moveDown();
-}
-
-function renderPdfRows(doc: PDFKit.PDFDocument, rows: Array<[string, string]>): void {
-  rows.forEach(([label, value]) => {
-    doc.fontSize(11).text(`${label}：${value || ''}`);
-    doc.moveDown(0.45);
+  renderStandardPdfTemplate(doc, template, {
+    batch: {
+      title: batch.title,
+      responsiblePerson: batch.responsiblePerson || '',
+      createdAt: formatDateOnly(batch.createdAt),
+      notes: batch.notes || '',
+    },
+    voidRecords: batch.voidRecords.map((record) => ({
+      tenant: { name: record.tenant.name },
+      plan: { title: record.plan?.title || '' },
+      itemTypeLabel: itemTypeLabel(record.itemType),
+      quantity: record.quantity,
+      reason: record.reason,
+    })),
   });
-}
-
-function renderPdfTable(doc: PDFKit.PDFDocument, headers: string[], rows: string[][]): void {
-  const startX = doc.x;
-  const widths = headers.map((_, index) => index === headers.length - 1 ? 90 : 95);
-  let y = doc.y;
-  const drawRow = (cells: string[], header = false) => {
-    let x = startX;
-    const height = 28;
-    cells.forEach((cell, index) => {
-      doc.rect(x, y, widths[index], height).stroke();
-      doc.fontSize(header ? 10 : 9).text(cell, x + 4, y + 7, { width: widths[index] - 8, ellipsis: true });
-      x += widths[index];
-    });
-    y += height;
-  };
-  drawRow(headers, true);
-  rows.forEach((row) => {
-    if (y > 760) {
-      doc.addPage();
-      y = doc.y;
-      drawRow(headers, true);
-    }
-    drawRow(row);
-  });
-  doc.y = y + 8;
 }
 
 function renderReissueRequestDoc(request: {

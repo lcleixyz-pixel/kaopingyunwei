@@ -77,6 +77,28 @@ describe('Phase 1.1 candidate registration template', () => {
     assert.deepEqual(needsPriorCertificate.missingMaterials, []);
   });
 
+  it('uses the stored candidate photo instead of trusting the photo material checkbox', () => {
+    const spoofedPhotoMaterial = validateRegistrationGate({
+      registrationFields: completeFields(),
+      materials: Object.fromEntries(DEFAULT_MATERIALS.map((item) => [item.key, true])),
+      candidateStatus: 'APPROVED',
+      photoUploaded: false,
+    });
+
+    assert.equal(spoofedPhotoMaterial.isEligible, false);
+    assert.deepEqual(spoofedPhotoMaterial.missingMaterials, ['证件照']);
+
+    const uploadedPhoto = validateRegistrationGate({
+      registrationFields: completeFields(),
+      materials: { idCard: true, photo: false, applicationCommitment: true },
+      candidateStatus: 'APPROVED',
+      photoUploaded: true,
+    });
+
+    assert.equal(uploadedPhoto.isEligible, true);
+    assert.deepEqual(uploadedPhoto.missingMaterials, []);
+  });
+
   it('exposes application conditions by level and treats the first level-five path as no extra material', () => {
     const levelFiveOptions = getApplicationConditionsForLevel('五级/初级工');
 

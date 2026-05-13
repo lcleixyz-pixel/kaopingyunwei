@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, CreditCard, Download, FileCheck2, Loader2, Pencil, Plus, Search, Upload, Users, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CreditCard, Download, FileCheck2, Image as ImageIcon, Loader2, Pencil, Plus, Search, Trash2, Upload, Users, XCircle } from 'lucide-react';
 import { apiClient, useApi } from '@/hooks/useApi';
 import {
   ALL_MATERIALS,
@@ -118,6 +118,9 @@ export default function Candidates() {
   const [form, setForm] = useState<ProfileForm>(emptyForm);
   const [uploadNotes, setUploadNotes] = useState('');
   const [uploadSaving, setUploadSaving] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState('');
+  const [photoVersion, setPhotoVersion] = useState(0);
 
   const canCreate = user?.role === 'SYS_ADMIN' || user?.role === 'BRANCH_ADMIN' || user?.role === 'BRANCH_STAFF';
   const canEditProfiles = user?.role === 'SYS_ADMIN' || user?.role === 'BRANCH_ADMIN' || user?.role === 'BRANCH_STAFF';
@@ -203,6 +206,30 @@ export default function Candidates() {
   useEffect(() => {
     fetchUploadBatches();
   }, [fetchUploadBatches]);
+
+  useEffect(() => {
+    if (!showProfile || !editingCandidate?.photo) {
+      setPhotoPreviewUrl('');
+      return;
+    }
+
+    let objectUrl = '';
+    let cancelled = false;
+    apiClient.get(`/candidates/${editingCandidate.id}/photo`, { responseType: 'blob' })
+      .then((response) => {
+        if (cancelled) return;
+        objectUrl = window.URL.createObjectURL(response.data);
+        setPhotoPreviewUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setPhotoPreviewUrl('');
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
+  }, [showProfile, editingCandidate?.id, editingCandidate?.photo, photoVersion]);
 
   const openCreate = () => {
     if (!shouldLoadCandidatesForPlan(selectedPlanId)) {
@@ -298,6 +325,53 @@ export default function Candidates() {
     }
   };
 
+  const handleUploadPhoto = async (file?: File) => {
+    if (!editingCandidate) {
+      setError('请先保存考生资料后再上传证件照');
+      return;
+    }
+    if (!file) return;
+
+    setPhotoUploading(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+      const response = await apiClient.post(`/candidates/${editingCandidate.id}/photo`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const candidate = response.data.data?.candidate as Candidate;
+      setEditingCandidate(candidate);
+      setCandidates((current) => current.map((item) => item.id === candidate.id ? candidate : item));
+      setForm((current) => ({ ...current, materials: { ...current.materials, photo: true } }));
+      setPhotoVersion((value) => value + 1);
+    } catch (err) {
+      setError(getErrorMessage(err, '上传证件照失败'));
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const handleDeletePhoto = async () => {
+    if (!editingCandidate) return;
+    if (!window.confirm(`确认删除「${editingCandidate.name}」的证件照？`)) return;
+
+    setPhotoUploading(true);
+    setError('');
+    try {
+      const response = await apiClient.delete(`/candidates/${editingCandidate.id}/photo`);
+      const candidate = response.data.data as Candidate;
+      setEditingCandidate(candidate);
+      setCandidates((current) => current.map((item) => item.id === candidate.id ? candidate : item));
+      setForm((current) => ({ ...current, materials: { ...current.materials, photo: false } }));
+      setPhotoVersion((value) => value + 1);
+    } catch (err) {
+      setError(getErrorMessage(err, '删除证件照失败'));
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
   const handleApprove = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     const candidate = candidates.find((item) => item.id === id);
     const ok = window.confirm(status === 'APPROVED'
@@ -323,14 +397,14 @@ export default function Candidates() {
     setExporting(true);
     setError('');
     try {
-      const response = await apiClient.get('/candidates/export', {
+      const response = await apiClient.get('/candidates/export-package', {
         params: { planId: selectedPlanId },
         responseType: 'blob',
       });
       const blobUrl = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `${selectedPlan?.title || '考生信息模板'}-考生信息模板.xls`;
+      link.download = `${selectedPlan?.title || '考生资料包'}-考生资料包.zip`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -397,7 +471,7 @@ export default function Candidates() {
             className="flex items-center gap-2 px-4 py-2.5 border border-slate-300 hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400 text-slate-700 rounded-lg font-medium transition-colors"
           >
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            导出 .xls
+            导出资料包
           </button>
           {canBackfillUpload && (
             <button
@@ -625,7 +699,58 @@ export default function Candidates() {
                     通用材料
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {DEFAULT_MATERIALS.map((item) => (
+                    <div className="rounded-lg border border-slate-200 px-3 py-3 text-sm text-slate-700 sm:col-span-2 xl:col-span-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 font-medium">
+                          <ImageIcon className="w-4 h-4 text-blue-600" />
+                          证件照
+                        </div>
+                        {editingCandidate?.photo ? (
+                          <span className="text-xs text-green-600">已上传</span>
+                        ) : (
+                          <span className="text-xs text-amber-600">待上传</span>
+                        )}
+                      </div>
+                      <div className="mt-3 flex items-center gap-3">
+                        <div className="h-28 w-20 overflow-hidden rounded border border-slate-200 bg-slate-50 flex items-center justify-center">
+                          {photoPreviewUrl ? (
+                            <img src={photoPreviewUrl} alt="证件照预览" className="h-full w-full object-cover" />
+                          ) : (
+                            <ImageIcon className="w-6 h-6 text-slate-300" />
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <label className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white ${photoUploading || !editingCandidate ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'}`}>
+                            {photoUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                            上传
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              disabled={photoUploading || !editingCandidate}
+                              className="hidden"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = '';
+                                void handleUploadPhoto(file);
+                              }}
+                            />
+                          </label>
+                          {editingCandidate?.photo && (
+                            <button
+                              type="button"
+                              disabled={photoUploading}
+                              onClick={handleDeletePhoto}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              删除
+                            </button>
+                          )}
+                          {!editingCandidate && <p className="text-xs text-slate-500">保存考生后上传</p>}
+                        </div>
+                      </div>
+                    </div>
+                    {DEFAULT_MATERIALS.filter((item) => item.key !== 'photo').map((item) => (
                       <label key={item.key} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
                         <input
                           type="checkbox"
@@ -1027,7 +1152,9 @@ async function getBlobErrorMessage(err: unknown, fallback: string): Promise<stri
       const text = await response.data.text();
       try {
         const payload = JSON.parse(text);
-        return payload?.error?.message || fallback;
+        return payload?.error?.details
+          ? `${payload?.error?.message || fallback}：${payload.error.details}`
+          : payload?.error?.message || fallback;
       } catch {
         return text || fallback;
       }

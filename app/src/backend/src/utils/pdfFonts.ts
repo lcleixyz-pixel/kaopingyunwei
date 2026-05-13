@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import path from 'node:path';
 
 export const PDF_CHINESE_FONT_ENV = 'PDF_CHINESE_FONT_PATH';
 export const PDF_CHINESE_FONT_FACE_ENV = 'PDF_CHINESE_FONT_FACE';
@@ -25,6 +26,8 @@ interface PdfFontDocument {
 }
 
 export const DEFAULT_CHINESE_FONT_CANDIDATES = [
+  { path: path.resolve(process.cwd(), 'data/fonts/Kaiti.ttc'), postscriptName: 'STKaitiSC-Regular' },
+  { path: '/app/data/fonts/Kaiti.ttc', postscriptName: 'STKaitiSC-Regular' },
   { path: '/usr/share/fonts/truetype/arphic/ukai.ttc', postscriptName: 'AR PL UKai CN' },
   { path: '/usr/share/fonts/truetype/arphic-bkai00mp/bkai00mp.ttf' },
   { path: '/System/Library/Fonts/Supplemental/Kaiti.ttc', postscriptName: 'STKaitiSC-Regular' },
