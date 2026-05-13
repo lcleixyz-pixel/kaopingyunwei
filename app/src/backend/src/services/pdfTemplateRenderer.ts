@@ -20,6 +20,32 @@ export function pdfDocumentOptionsFromTemplate(definition: PdfTemplateDefinition
   };
 }
 
+const PDF_HORIZONTAL_PUNCTUATION_REPLACEMENTS: Record<string, string> = {
+  '（': '(',
+  '）': ')',
+  '，': ',',
+  '、': ',',
+  '。': '.',
+  '：': ':',
+  '；': ';',
+  '？': '?',
+  '！': '!',
+  '《': '<',
+  '》': '>',
+  '“': '"',
+  '”': '"',
+  '‘': "'",
+  '’': "'",
+  '～': '~',
+  '－': '-',
+  '—': '-',
+  '　': ' ',
+};
+
+export function normalizePdfText(text: string): string {
+  return text.replace(/[（），、。：；？！《》“”‘’～－—　]/g, (match) => PDF_HORIZONTAL_PUNCTUATION_REPLACEMENTS[match] || match);
+}
+
 export function renderStandardPdfTemplate(
   doc: PDFKit.PDFDocument,
   template: StandardPdfTemplateDefinition,
@@ -32,13 +58,13 @@ export function renderStandardPdfTemplate(
 
   renderPdfTitle(doc, template.title, template.typography.titleSize);
   if (template.description) {
-    doc.fontSize(Math.max(9, template.typography.rowSize - 1)).fillColor('#475569').text(template.description, { align: 'center' });
+    doc.fontSize(Math.max(9, template.typography.rowSize - 1)).fillColor('#475569').text(normalizePdfText(template.description), { align: 'center' });
     doc.fillColor('#111827').moveDown();
   }
 
   template.rows.forEach((row) => {
     const value = resolveTemplateValue(row.source, context);
-    doc.fontSize(template.typography.rowSize).text(`${row.label}：${value}`);
+    doc.fontSize(template.typography.rowSize).text(normalizePdfText(`${row.label}：${value}`));
     doc.moveDown(0.45);
   });
 
@@ -60,14 +86,14 @@ export function renderStandardPdfTemplate(
   if (template.signatures.length > 0) {
     doc.moveDown(2);
     template.signatures.forEach((line) => {
-      doc.fontSize(template.typography.rowSize).text(line);
+      doc.fontSize(template.typography.rowSize).text(normalizePdfText(line));
       doc.moveDown(0.8);
     });
   }
 
   if (template.footerNote) {
     doc.moveDown();
-    doc.fontSize(Math.max(8, template.typography.rowSize - 2)).fillColor('#475569').text(template.footerNote);
+    doc.fontSize(Math.max(8, template.typography.rowSize - 2)).fillColor('#475569').text(normalizePdfText(template.footerNote));
     doc.fillColor('#111827');
   }
 }
@@ -86,13 +112,13 @@ function renderSupplyRequestFormTemplate(
   const rowSize = template.typography.rowSize;
   const valueSize = template.typography.tableBodySize;
 
-  doc.fontSize(template.typography.titleSize).fillColor('#111827').text(template.title, left, titleY, {
+  doc.fontSize(template.typography.titleSize).fillColor('#111827').text(normalizePdfText(template.title), left, titleY, {
     width: tableWidth,
     align: 'center',
   });
 
   if (template.description) {
-    doc.fontSize(Math.max(9, rowSize - 1)).fillColor('#475569').text(template.description, left, descriptionY, {
+    doc.fontSize(Math.max(9, rowSize - 1)).fillColor('#475569').text(normalizePdfText(template.description), left, descriptionY, {
       width: tableWidth,
       align: 'center',
     });
@@ -213,7 +239,7 @@ export function renderTable5PdfTemplate(
 }
 
 export function renderPdfTitle(doc: PDFKit.PDFDocument, title: string, size = 18): void {
-  doc.fontSize(size).text(title, { align: 'center' });
+  doc.fontSize(size).text(normalizePdfText(title), { align: 'center' });
   doc.moveDown();
 }
 
@@ -286,9 +312,9 @@ function renderTable5Page(
 ): void {
   const [w0, w1, w2, w3, w4] = layout.widths;
   if (template.codeLabel) {
-    doc.fontSize(11).text(template.codeLabel, layout.left, layout.top);
+    doc.fontSize(11).text(normalizePdfText(template.codeLabel), layout.left, layout.top);
   }
-  doc.fontSize(template.typography.titleSize).text(template.title, layout.left, layout.top + 28, {
+  doc.fontSize(template.typography.titleSize).text(normalizePdfText(template.title), layout.left, layout.top + 28, {
     width: layout.tableWidth,
     align: 'center',
   });
@@ -372,19 +398,39 @@ export function renderPdfTable(
   const startX = doc.x;
   const widths = options.widths ?? headers.map((_, index) => index === headers.length - 1 ? 90 : 95);
   let y = doc.y;
+  const paddingX = 4;
+  const paddingY = 7;
+  const minHeight = 28;
+  const bottomY = () => doc.page.height - doc.page.margins.bottom;
+  const rowHeight = (cells: string[], header = false) => {
+    const fontSize = header ? options.headerSize ?? 10 : options.bodySize ?? 9;
+    doc.fontSize(fontSize);
+    return Math.max(
+      minHeight,
+      ...cells.map((cell, index) => doc.heightOfString(normalizePdfText(cell), {
+        width: Math.max(1, widths[index] - paddingX * 2),
+        lineGap: 1,
+      }) + paddingY * 2),
+    );
+  };
   const drawRow = (cells: string[], header = false) => {
+    const height = rowHeight(cells, header);
     let x = startX;
-    const height = 28;
     cells.forEach((cell, index) => {
       doc.rect(x, y, widths[index], height).stroke();
-      doc.fontSize(header ? options.headerSize ?? 10 : options.bodySize ?? 9).text(cell, x + 4, y + 7, { width: widths[index] - 8, ellipsis: true });
+      doc.fontSize(header ? options.headerSize ?? 10 : options.bodySize ?? 9).text(normalizePdfText(cell), x + paddingX, y + paddingY, {
+        width: Math.max(1, widths[index] - paddingX * 2),
+        height: Math.max(1, height - paddingY * 2),
+        lineGap: 1,
+      });
       x += widths[index];
     });
     y += height;
   };
   drawRow(headers, true);
   rows.forEach((row) => {
-    if (y > 760) {
+    const height = rowHeight(row);
+    if (y + height > bottomY()) {
       doc.addPage();
       y = doc.y;
       drawRow(headers, true);
@@ -400,7 +446,7 @@ function drawTemplateField(
   value: string,
   calibration: CertificatePrintCalibration,
 ): void {
-  const text = value || '';
+  const text = normalizePdfText(value || '');
   let fontSize = field.size * calibration.fontScale;
   while (fontSize > 8 && doc.fontSize(fontSize).widthOfString(text) > field.width - 4) {
     fontSize -= 1;
@@ -440,7 +486,7 @@ function drawCell(
   align: 'center' | 'left' = 'center',
 ): void {
   doc.rect(x, y, width, height).stroke();
-  doc.fontSize(10).text(text, x + 6, y + 8, {
+  doc.fontSize(10).text(normalizePdfText(text), x + 6, y + 8, {
     width: width - 12,
     height: height - 12,
     align,
@@ -462,16 +508,17 @@ function drawFormCell(
   } = {},
 ): void {
   const fontSize = options.fontSize ?? 12;
+  const displayText = normalizePdfText(text);
   const paddingX = options.align === 'left' ? 10 : 6;
   const paddingTop = options.verticalAlign === 'top' ? 14 : 0;
   const contentWidth = Math.max(1, width - paddingX * 2);
   doc.rect(x, y, width, height).stroke();
   doc.fontSize(fontSize).fillColor('#111827');
-  const textHeight = measureTextHeight(doc, text, contentWidth, fontSize);
+  const textHeight = measureTextHeight(doc, displayText, contentWidth, fontSize);
   const textY = options.verticalAlign === 'top'
     ? y + paddingTop
     : y + Math.max(0, (height - textHeight) / 2);
-  doc.text(text, x + paddingX, textY, {
+  doc.text(displayText, x + paddingX, textY, {
     width: contentWidth,
     height: Math.max(1, height - 8),
     align: options.align ?? 'center',
@@ -487,7 +534,7 @@ function drawPlainTextInCell(
   width: number,
   fontSize: number,
 ): void {
-  doc.fontSize(fontSize).fillColor('#111827').text(text, x, y, { width, align: 'left' });
+  doc.fontSize(fontSize).fillColor('#111827').text(normalizePdfText(text), x, y, { width, align: 'left' });
 }
 
 function measureTextHeight(doc: PDFKit.PDFDocument, text: string, width: number, fontSize: number): number {

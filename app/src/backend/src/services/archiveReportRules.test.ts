@@ -22,7 +22,7 @@ const records = [
       idCard: '65432619791022051X',
       registrationProfile: { fieldsJson: JSON.stringify({ 所在单位: '新疆金玛世纪装饰有限责任公司' }) },
       plan: {
-        tenant: { name: '新疆中和鉴珠宝玉石质量检测研究所（有限公司）' },
+        tenant: { code: 'XJ001', name: 'S001365000001' },
         occupation: '贵金属首饰与宝玉石检测员',
         profession: '玉石检验员',
         level: '三级/高级工',
@@ -37,7 +37,7 @@ const records = [
       idCard: '65210119890613041X',
       registrationProfile: { fieldsJson: '{}' },
       plan: {
-        tenant: { name: '新疆中和鉴珠宝玉石质量检测研究所（有限公司）' },
+        tenant: { code: 'XJ001', name: 'S001365000001' },
         occupation: '贵金属首饰与宝玉石检测员',
         profession: '玉石检验员',
         level: '三级/高级工',
@@ -52,7 +52,7 @@ const records = [
       idCard: '110101199001010011',
       registrationProfile: { fieldsJson: '{}' },
       plan: {
-        tenant: { name: '新疆中和鉴珠宝玉石质量检测研究所（有限公司）' },
+        tenant: { code: 'XJ001', name: 'S001365000001' },
         occupation: '贵金属首饰与宝玉石检测员',
         profession: '玉石检验员',
         level: '三级/高级工',
@@ -86,6 +86,7 @@ describe('archive report rules', () => {
     assert.equal(rows[0].所在单位, '新疆金玛世纪装饰有限责任公司');
     assert.equal(rows[0].职业技能等级, '3');
     assert.equal(rows[0].发证日期, '2026-01-07');
+    assert.equal(rows[0].评价机构, '新疆中和鉴珠宝玉石质量检测研究所（有限公司）');
     assert.equal(rows[1].所在单位, '其他');
     assert.equal(rows[1].发证机构, '国家珠宝玉石首饰检验集团有限公司');
   });

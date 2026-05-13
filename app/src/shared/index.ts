@@ -40,6 +40,22 @@ export interface Tenant {
   updatedAt?: string;
 }
 
+export const TENANT_OFFICIAL_NAMES_BY_CODE: Record<string, string> = {
+  NGTCS0013: '国家珠宝玉石首饰检验集团有限公司',
+  BJ001: '国家珠宝玉石首饰检验集团有限公司',
+  SZ001: '国检教育科技（深圳）有限公司',
+  XJ001: '新疆中和鉴珠宝玉石质量检测研究所（有限公司）',
+  YN001: '宝检教育科技（云南）有限公司',
+};
+
+export function formatTenantOfficialName(tenant?: Pick<Tenant, 'code' | 'name'> | null): string {
+  const code = String(tenant?.code ?? '').trim();
+  if (code && TENANT_OFFICIAL_NAMES_BY_CODE[code]) {
+    return TENANT_OFFICIAL_NAMES_BY_CODE[code];
+  }
+  return String(tenant?.name ?? '').trim();
+}
+
 // ─── 用户 ───
 export type UserRole = 'SYS_ADMIN' | 'HQ_ADMIN' | 'HQ_STAFF' | 'BRANCH_ADMIN' | 'BRANCH_STAFF' | 'EXAMINER' | 'INSPECTOR';
 export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'LOCKED';

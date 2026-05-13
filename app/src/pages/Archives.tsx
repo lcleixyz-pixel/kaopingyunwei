@@ -17,6 +17,7 @@ import {
 import { apiClient, useApi } from '@/hooks/useApi';
 import { useAuthStore } from '@/stores/authStore';
 import {
+  formatTenantOfficialName,
   normalizeLevelLabel,
   type ApiResponse,
   type Archive,
@@ -118,9 +119,9 @@ export default function Archives() {
 
   const selectedCompleteCount = selectedPlans.reduce((sum, plan) => sum + plan.completeRecordCount, 0);
   const suggestedTitle = useMemo(() => {
-    const tenantName = selectedPlans[0]?.tenant?.name || tenant?.name || '';
+    const tenantName = formatTenantOfficialName(selectedPlans[0]?.tenant || tenant);
     return form.batchNo && tenantName ? `${tenantName}（新增${selectedCompleteCount}条，${form.batchNo}）` : '';
-  }, [form.batchNo, selectedCompleteCount, selectedPlans, tenant?.name]);
+  }, [form.batchNo, selectedCompleteCount, selectedPlans, tenant]);
 
   const togglePlan = (planId: string) => {
     setSelectedPlanIds((current) => (

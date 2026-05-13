@@ -10,6 +10,7 @@
     "backend:build": "npm run prisma:generate && tsc -p src/backend/tsconfig.json",
     "backend:start": "node src/backend/dist/index.js",
     "backend:test": "node --import tsx --test src/backend/src/**/*.test.ts",
+    "tenant:names:sync": "tsx src/backend/src/scripts/syncTenantFilingNames.ts",
     "phase1:smoke": "node scripts/phase1-api-smoke.mjs",
     "build": "tsc -b && vite build",
     "check": "npm run build && npm run backend:build",
