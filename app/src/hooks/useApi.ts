@@ -66,6 +66,14 @@ export function useApi() {
     return response.data.data as T;
   }, []);
 
+  const put = useCallback(async <T>(url: string, data?: unknown): Promise<T> => {
+    const response = await apiClient.put<ApiResponse<T>>(url, data);
+    if (!response.data.success) {
+      throw new Error(response.data.error?.message || '请求失败');
+    }
+    return response.data.data as T;
+  }, []);
+
   const del = useCallback(async <T>(url: string): Promise<T> => {
     const response = await apiClient.delete<ApiResponse<T>>(url);
     if (!response.data.success) {
@@ -74,7 +82,7 @@ export function useApi() {
     return response.data.data as T;
   }, []);
 
-  return { get, post, patch, del };
+  return { get, post, patch, put, del };
 }
 
 export { apiClient };

@@ -25,6 +25,7 @@ import archivesRouter from './routes/archives.js';
 import remindersRouter from './routes/reminders.js';
 import settingsRouter from './routes/settings.js';
 import exportTemplatesRouter from './routes/export-templates.js';
+import pdfTemplatesRouter from './routes/pdf-templates.js';
 import hqRouter from './routes/hq.js';
 import usersRouter from './routes/users.js';
 
@@ -67,6 +68,7 @@ app.use('/api/archives', archivesRouter);
 app.use('/api/reminders', remindersRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/export-templates', exportTemplatesRouter);
+app.use('/api/pdf-templates', pdfTemplatesRouter);
 app.use('/api/hq', hqRouter);
 app.use('/api/users', usersRouter);
 

@@ -728,6 +728,93 @@ export interface ExportTemplate {
   updatedAt: string;
 }
 
+// ─── PDF 打印模板 ───
+export type PdfTemplateKey =
+  | 'CERT_SUPPLY_REQUEST'
+  | 'CERT_PRINT_SIGNATURE'
+  | 'CERTIFICATE_PRINT'
+  | 'CERT_DESTROY_BATCH'
+  | 'ARCHIVE_TABLE5';
+
+export interface PdfTemplatePageDefinition {
+  size: 'A4';
+  layout: 'portrait' | 'landscape';
+  margin: number;
+}
+
+export interface PdfTemplateTypographyDefinition {
+  titleSize: number;
+  rowSize: number;
+  tableHeaderSize: number;
+  tableBodySize: number;
+}
+
+export interface StandardPdfTemplateDefinition {
+  kind: 'standard';
+  layout?: 'field-list' | 'supply-request-form';
+  title: string;
+  description?: string;
+  page: PdfTemplatePageDefinition;
+  typography: PdfTemplateTypographyDefinition;
+  rows: Array<{ label: string; source: string }>;
+  table?: {
+    rowsSource: string;
+    columns: Array<{ label: string; source: string; width?: number }>;
+  };
+  signatures: string[];
+  footerNote?: string;
+}
+
+export interface CertificatePrintTemplateDefinition {
+  kind: 'certificate-print';
+  title: string;
+  description?: string;
+  page: PdfTemplatePageDefinition & { layout: 'landscape' };
+  fields: Array<{
+    id: string;
+    label: string;
+    source: string;
+    xMm: number;
+    yMm: number;
+    widthMm: number;
+    heightMm: number;
+    fontSize: number;
+    align: 'left' | 'center' | 'right';
+  }>;
+}
+
+export interface Table5PdfTemplateDefinition {
+  kind: 'table5';
+  title: string;
+  codeLabel?: string;
+  page: PdfTemplatePageDefinition;
+  typography: PdfTemplateTypographyDefinition;
+  labels: Record<string, string>;
+  signatures: {
+    informationManagerOpinion: string;
+    unitOpinion: string;
+  };
+  overflowNote?: string;
+}
+
+export type PdfTemplateDefinition =
+  | StandardPdfTemplateDefinition
+  | CertificatePrintTemplateDefinition
+  | Table5PdfTemplateDefinition;
+
+export interface PdfTemplate {
+  id?: string;
+  key: PdfTemplateKey;
+  name: string;
+  version: number;
+  definition: PdfTemplateDefinition;
+  isEnabled: boolean;
+  isDefault: boolean;
+  updatedBy?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // ─── 审计日志 ───
 export interface AuditLog {
   id: string;

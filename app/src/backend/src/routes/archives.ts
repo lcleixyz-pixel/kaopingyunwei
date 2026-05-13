@@ -18,8 +18,11 @@ import { decrypt, sha256 } from '../utils/crypto.js';
 import { recordAudit } from '../utils/audit.js';
 import { applyPdfFont, PdfFontMissingError, requireChinesePdfFont } from '../utils/pdfFonts.js';
 import { publishedPlanWhereForRead } from '../services/accessScope.js';
+import { resolvePdfTemplateDefinition, type Table5PdfTemplateDefinition } from '../services/pdfTemplates.js';
+import { pdfDocumentOptionsFromTemplate, renderTable5PdfTemplate } from '../services/pdfTemplateRenderer.js';
 import {
   ARCHIVE_REPORT_HEADERS,
+  buildArchiveBatchDataType,
   buildArchiveReportRows,
   buildArchiveSummaryRows,
   buildSuggestedArchiveBatchTitle,
@@ -189,7 +192,7 @@ router.post('/batches', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async (req
           recordCount: context.completeCertificates.length,
         }),
         uploadDate: parseDateInput(result.data.uploadDate) || new Date(),
-        dataType: '新增',
+        dataType: buildArchiveBatchDataType(),
         unitLeader: result.data.unitLeader,
         informationManager: result.data.informationManager,
         recordCount: context.completeCertificates.length,
@@ -298,9 +301,17 @@ router.get('/batches/:id/table5.pdf', async (req, res) => {
 
     const summaryRows = await getBatchSummaryRows(batch);
     const total = summaryRows.reduce((sum, row) => sum + row.quantity, 0);
+    const template = await getTable5PdfTemplate();
     sendPdf(res, `表5-职业技能等级证书数据审核确认表-${batch.batchNo}.pdf`, (doc) => {
-      renderTable5Pdf(doc, batch, summaryRows, total);
-    });
+      renderTable5PdfTemplate(doc, template, {
+        tenant: batch.tenant,
+        unitLeader: batch.unitLeader,
+        informationManager: batch.informationManager,
+        title: batch.title,
+        uploadDateText: formatChineseDate(batch.uploadDate),
+        dataType: batch.dataType,
+      }, summaryRows, total);
+    }, pdfDocumentOptionsFromTemplate(template));
   } catch (err) {
     handleRouteError(res, err, '生成表5 PDF失败');
   }
@@ -752,8 +763,9 @@ function sendPdf(
   res: Response,
   filename: string,
   render: (doc: PDFKit.PDFDocument) => void,
+  options: PDFKit.PDFDocumentOptions = { size: 'A4', margin: 32 },
 ): void {
-  const doc = new PDFDocument({ size: 'A4', margin: 32 });
+  const doc = new PDFDocument(options);
   const chunks: Buffer[] = [];
   doc.on('data', (chunk: Buffer) => chunks.push(chunk));
   doc.on('end', () => {
@@ -766,97 +778,12 @@ function sendPdf(
   doc.end();
 }
 
-function renderTable5Pdf(
-  doc: PDFKit.PDFDocument,
-  batch: ArchiveReportBatchWithInclude,
-  summaryRows: ArchiveSummaryRow[],
-  total: number,
-): void {
-  const left = 48;
-  const top = 38;
-  const widths = [86, 160, 86, 130, 64];
-  const rowHeights = [38, 34, 34, 34, 34, 34, 34, 42, 62, 62];
-  const tableWidth = widths.reduce((sum, width) => sum + width, 0);
-
-  doc.fontSize(11).text('表5', left, top);
-  doc.fontSize(18).text('职业技能等级证书数据审核确认表', left, top + 24, { width: tableWidth, align: 'center' });
-
-  let y = top + 66;
-  drawCell(doc, left, y, widths[0], rowHeights[0], '基本信息');
-  drawCell(doc, left + widths[0], y, widths[1], rowHeights[0], '单位名称');
-  drawCell(doc, left + widths[0] + widths[1], y, widths[2] + widths[3] + widths[4], rowHeights[0], batch.tenant.name);
-  y += rowHeights[0];
-
-  drawCell(doc, left, y, widths[0], rowHeights[1], '');
-  drawCell(doc, left + widths[0], y, widths[1], rowHeights[1], '单位负责人');
-  drawCell(doc, left + widths[0] + widths[1], y, widths[2], rowHeights[1], batch.unitLeader);
-  drawCell(doc, left + widths[0] + widths[1] + widths[2], y, widths[3], rowHeights[1], '信息管理员');
-  drawCell(doc, left + widths[0] + widths[1] + widths[2] + widths[3], y, widths[4], rowHeights[1], batch.informationManager);
-  y += rowHeights[1];
-
-  drawCell(doc, left, y, widths[0], rowHeights[2], '');
-  drawCell(doc, left + widths[0], y, widths[1], rowHeights[2], '标题名称');
-  drawCell(doc, left + widths[0] + widths[1], y, widths[2] + widths[3] + widths[4], rowHeights[2], batch.title);
-  y += rowHeights[2];
-
-  drawCell(doc, left, y, widths[0], rowHeights[3], '');
-  drawCell(doc, left + widths[0], y, widths[1], rowHeights[3], '上传日期');
-  drawCell(doc, left + widths[0] + widths[1], y, widths[2] + widths[3] + widths[4], rowHeights[3], formatChineseDate(batch.uploadDate));
-  y += rowHeights[3];
-
-  drawCell(doc, left, y, widths[0], rowHeights[4] * 4, '数据信息');
-  drawCell(doc, left + widths[0], y, widths[1], rowHeights[4], '数据类型');
-  drawCell(doc, left + widths[0] + widths[1], y, widths[2] + widths[3] + widths[4], rowHeights[4], batch.dataType);
-  y += rowHeights[4];
-
-  drawCell(doc, left + widths[0], y, widths[1], rowHeights[5], '职业名称');
-  drawCell(doc, left + widths[0] + widths[1], y, widths[2], rowHeights[5], '工种名称');
-  drawCell(doc, left + widths[0] + widths[1] + widths[2], y, widths[3], rowHeights[5], '级别');
-  drawCell(doc, left + widths[0] + widths[1] + widths[2] + widths[3], y, widths[4], rowHeights[5], '数量');
-  y += rowHeights[5];
-
-  const visibleRows = [...summaryRows];
-  while (visibleRows.length < 2) visibleRows.push({ occupation: '', profession: '', level: '', quantity: 0 });
-  visibleRows.slice(0, 2).forEach((row) => {
-    drawCell(doc, left + widths[0], y, widths[1], rowHeights[6], row.occupation);
-    drawCell(doc, left + widths[0] + widths[1], y, widths[2], rowHeights[6], row.profession);
-    drawCell(doc, left + widths[0] + widths[1] + widths[2], y, widths[3], rowHeights[6], row.level);
-    drawCell(doc, left + widths[0] + widths[1] + widths[2] + widths[3], y, widths[4], rowHeights[6], row.quantity ? String(row.quantity) : '');
-    y += rowHeights[6];
-  });
-
-  drawCell(doc, left, y, widths[0], rowHeights[7], '合计');
-  drawCell(doc, left + widths[0], y, widths[1] + widths[2] + widths[3] + widths[4], rowHeights[7], String(total));
-  y += rowHeights[7];
-
-  drawCell(doc, left, y, widths[0], rowHeights[8], '信息管理员意见');
-  drawCell(doc, left + widths[0], y, widths[1] + widths[2] + widths[3] + widths[4], rowHeights[8], '签字：                           年      月      日', 'left');
-  y += rowHeights[8];
-
-  drawCell(doc, left, y, widths[0], rowHeights[9], '单位意见');
-  drawCell(doc, left + widths[0], y, widths[1] + widths[2] + widths[3] + widths[4], rowHeights[9], '中心领导签字：                    单位盖章：                    年      月      日', 'left');
-
-  if (summaryRows.length > 2) {
-    doc.fontSize(9).fillColor('#475569').text(`注：本批次共 ${summaryRows.length} 个职业/工种/等级汇总项，表格仅显示前 2 项，完整明细以数据表为准。`, left, y + rowHeights[9] + 8);
-    doc.fillColor('#111827');
+async function getTable5PdfTemplate(): Promise<Table5PdfTemplateDefinition> {
+  const template = await resolvePdfTemplateDefinition(prisma.pdfTemplate, 'ARCHIVE_TABLE5');
+  if (template.kind !== 'table5') {
+    throw new RouteError('PDF_TEMPLATE_INVALID', '表5 PDF 模板类型不匹配', 500);
   }
-}
-
-function drawCell(
-  doc: PDFKit.PDFDocument,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  text: string,
-  align: 'center' | 'left' = 'center',
-): void {
-  doc.rect(x, y, width, height).stroke();
-  doc.fontSize(10).text(text, x + 6, y + 8, {
-    width: width - 12,
-    height: height - 12,
-    align,
-  });
+  return template;
 }
 
 function parseSummarySnapshot(value?: string | null): ArchiveSummaryRow[] {

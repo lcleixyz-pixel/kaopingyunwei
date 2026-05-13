@@ -808,3 +808,20 @@ model ExportTemplate {
   @@index([tenantId, type])
   @@map("export_templates")
 }
+
+// ─────────────────────────────────────────────
+// 14. PDF 打印模板（总部统一模板库）
+// ─────────────────────────────────────────────
+model PdfTemplate {
+  id             String   @id @default(uuid())
+  key            String   @unique
+  name           String
+  version        Int      @default(1)
+  definitionJson String
+  isEnabled      Boolean  @default(true)
+  updatedBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("pdf_templates")
+}

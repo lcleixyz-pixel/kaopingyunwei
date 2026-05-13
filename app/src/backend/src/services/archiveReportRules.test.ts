@@ -4,6 +4,7 @@ import {
   ARCHIVE_REPORT_HEADERS,
   buildArchiveReportRows,
   buildArchiveSummaryRows,
+  buildArchiveBatchDataType,
   buildSuggestedArchiveBatchTitle,
   canManageArchiveReportBatch,
   canReadArchiveReportAcrossTenants,
@@ -139,5 +140,9 @@ describe('archive report rules', () => {
       }),
       '新疆中和鉴珠宝玉石质量检测研究所（有限公司）（新增12条，251120S0013650000010005）',
     );
+  });
+
+  it('generates Table 5 data type on the backend', () => {
+    assert.equal(buildArchiveBatchDataType(), '新增');
   });
 });
