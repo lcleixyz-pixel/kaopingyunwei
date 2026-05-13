@@ -151,6 +151,22 @@ export function renderCertificatePrintTemplate(
   certificates.forEach((certificate, index) => {
     if (index > 0) doc.addPage(pdfDocumentOptionsFromTemplate(template));
     template.fields.forEach((field) => {
+      const value = resolveTemplateValue(field.source, certificate);
+      if (field.type === 'image') {
+        drawTemplateImage(
+          doc,
+          {
+            x: certificatePrintMmToPt(field.xMm),
+            y: certificatePrintMmToPt(field.yMm),
+            width: certificatePrintMmToPt(field.widthMm),
+            height: certificatePrintMmToPt(field.heightMm),
+          },
+          value,
+          calibration,
+        );
+        return;
+      }
+
       drawTemplateField(
         doc,
         {
@@ -161,7 +177,7 @@ export function renderCertificatePrintTemplate(
           size: field.fontSize,
           align: field.align,
         },
-        resolveTemplateValue(field.source, certificate),
+        value,
         calibration,
       );
     });
@@ -398,6 +414,20 @@ function drawTemplateField(
       align: field.align,
       lineBreak: false,
     });
+}
+
+function drawTemplateImage(
+  doc: PDFKit.PDFDocument,
+  box: { x: number; y: number; width: number; height: number },
+  value: string,
+  calibration: CertificatePrintCalibration,
+): void {
+  if (!value) return;
+  doc.image(value, box.x + calibration.offsetX, box.y + calibration.offsetY, {
+    fit: [box.width, box.height],
+    align: 'center',
+    valign: 'center',
+  });
 }
 
 function drawCell(

@@ -60,6 +60,33 @@ describe('PDF template configuration rules', () => {
     );
   });
 
+  it('supports one-inch candidate photo image fields in certificate print templates', () => {
+    const definition = getDefaultPdfTemplateDefinition('CERTIFICATE_PRINT');
+    if (definition.kind !== 'certificate-print') throw new Error('expected certificate print template');
+
+    const withPhoto = validatePdfTemplateDefinition('CERTIFICATE_PRINT', {
+      ...definition,
+      fields: [
+        ...definition.fields,
+        {
+          id: 'photo',
+          type: 'image',
+          label: '证件照',
+          source: 'candidate.photo',
+          xMm: 25,
+          yMm: 55,
+          widthMm: 25,
+          heightMm: 35,
+          fontSize: 10,
+          align: 'center',
+        },
+      ],
+    });
+
+    if (withPhoto.kind !== 'certificate-print') throw new Error('expected certificate print template');
+    assert.equal(withPhoto.fields.at(-1)?.type, 'image');
+  });
+
   it('rejects table templates without visible columns', () => {
     const definition = getDefaultPdfTemplateDefinition('CERT_PRINT_SIGNATURE');
     if (definition.kind !== 'standard' || !definition.table) throw new Error('expected table template');

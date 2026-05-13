@@ -42,6 +42,15 @@ describe('PDF font resolution', () => {
     assert.equal(fontPath, linuxKaitiPath);
   });
 
+  it('recognizes the mounted production Kaiti font path', () => {
+    const font = requireChinesePdfFont({
+      env: {},
+      exists: (candidate) => candidate === '/app/data/fonts/Kaiti.ttc',
+    });
+
+    assert.deepEqual(getPdfKitFontArgs(font), ['/app/data/fonts/Kaiti.ttc', 'STKaitiSC-Regular']);
+  });
+
   it('uses Kaithi fonts for certificate template PDFs before generic CJK fonts', () => {
     const kaithiPath = '/usr/share/fonts/truetype/arphic/ukai.ttc';
     const fontPath = resolveCertificatePrintFontPath({

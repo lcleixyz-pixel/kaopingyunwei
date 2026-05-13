@@ -1,3 +1,5 @@
+import sharp from 'sharp';
+
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3001/api';
 const HQ_TENANT_CODE = process.env.HQ_TENANT_CODE || 'NGTCS0013';
 const BRANCH_TENANT_CODE = process.env.BRANCH_TENANT_CODE || 'BJ001';
@@ -259,21 +261,23 @@ async function main() {
     body: { notes: 'HQ should not complete nodes' },
   }, 403, 'HQ should be read only for node completion');
 
+  await uploadCandidatePhoto(candidate.id, branch.token);
+
   await api(`/candidates/${candidate.id}/approve`, {
     method: 'POST',
     token: branch.token,
     body: { status: 'APPROVED' },
   });
 
-  const exportResponse = await raw(`/candidates/export?planId=${plan.id}`, {
+  const exportResponse = await raw(`/candidates/export-package?planId=${plan.id}`, {
     token: branch.token,
   });
   if (!exportResponse.ok) {
-    throw new Error(`candidate export failed: ${exportResponse.status} ${await exportResponse.text()}`);
+    throw new Error(`candidate export package failed: ${exportResponse.status} ${await exportResponse.text()}`);
   }
   const exportBytes = await exportResponse.arrayBuffer();
   if (exportBytes.byteLength < 1000) {
-    throw new Error(`candidate export should be a non-empty xls, got ${exportBytes.byteLength} bytes`);
+    throw new Error(`candidate export package should be a non-empty zip, got ${exportBytes.byteLength} bytes`);
   }
 
   const uploadBatch = await api(`/exam-plans/${plan.id}/local-upload-batches`, {
@@ -435,6 +439,22 @@ async function login(body) {
   return data;
 }
 
+async function uploadCandidatePhoto(candidateId, token) {
+  const photo = await sharp({
+    create: {
+      width: 600,
+      height: 800,
+      channels: 3,
+      background: '#ffffff',
+    },
+  })
+    .png()
+    .toBuffer();
+  const formData = new FormData();
+  formData.append('photo', new Blob([photo], { type: 'image/png' }), 'smoke-photo.png');
+  await api(`/candidates/${candidateId}/photo`, { method: 'POST', token, formData });
+}
+
 async function api(path, options = {}) {
   const response = await raw(path, options);
   const payload = await response.json().catch(() => null);
@@ -452,13 +472,17 @@ async function expectApiFailure(path, options, status, message) {
 }
 
 function raw(path, options = {}) {
+  const headers = {
+    ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+  };
+  if (options.body) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   return fetch(`${API_BASE_URL}${path}`, {
     method: options.method || 'GET',
-    headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    headers,
+    body: options.formData || (options.body ? JSON.stringify(options.body) : undefined),
   });
 }
 

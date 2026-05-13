@@ -547,16 +547,22 @@ function CertificatePrintTemplateEditor({ definition, onChange }: { definition: 
       </div>
       <TemplateSection title="套打字段坐标（毫米）">
         <div className="overflow-auto rounded-lg border border-slate-200">
-          <table className="w-full min-w-[900px] text-sm">
+          <table className="w-full min-w-[980px] text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
-                {['字段', '来源', 'X', 'Y', '宽', '高', '字号', '对齐'].map((header) => <th key={header} className="px-3 py-2 text-left font-medium">{header}</th>)}
+                {['字段', '类型', '来源', 'X', 'Y', '宽', '高', '字号', '对齐'].map((header) => <th key={header} className="px-3 py-2 text-left font-medium">{header}</th>)}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {definition.fields.map((field, index) => (
                 <tr key={field.id}>
                   <td className="px-3 py-2"><input className={inputClass} value={field.label} onChange={(event) => updateField(index, { label: event.target.value })} /></td>
+                  <td className="px-3 py-2">
+                    <select className={inputClass} value={field.type || 'text'} onChange={(event) => updateField(index, { type: event.target.value as 'text' | 'image' })}>
+                      <option value="text">文字</option>
+                      <option value="image">图片</option>
+                    </select>
+                  </td>
                   <td className="px-3 py-2 font-mono text-xs text-slate-500">{field.source}</td>
                   <td className="px-3 py-2"><SmallNumber value={field.xMm} onChange={(value) => updateField(index, { xMm: value })} /></td>
                   <td className="px-3 py-2"><SmallNumber value={field.yMm} onChange={(value) => updateField(index, { yMm: value })} /></td>

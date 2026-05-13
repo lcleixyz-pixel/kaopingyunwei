@@ -351,6 +351,7 @@ export interface RegistrationGateInput {
   materials?: MaterialChecklist | Record<string, boolean>;
   candidateStatus?: string;
   requireApproved?: boolean;
+  photoUploaded?: boolean;
 }
 
 export interface RegistrationGateResult {
@@ -379,6 +380,7 @@ export interface CandidateDefaultsInput {
   education?: string | null;
   workYears?: number | null;
   applyLevel?: string | null;
+  photo?: string | null;
   plan?: {
     profession?: string | null;
     level?: string | null;
@@ -510,6 +512,9 @@ export function isPriorCertificateRequired(fields: RegistrationFields): boolean 
 export function validateRegistrationGate(input: RegistrationGateInput): RegistrationGateResult {
   const fields = normalizeRegistrationFields(input.registrationFields);
   const materials = normalizeMaterials(input.materials);
+  if (typeof input.photoUploaded === 'boolean') {
+    materials.photo = input.photoUploaded;
+  }
   const missingFields = getRequiredFields(fields).filter((field) => !fields[field]);
   const invalidFields = getInvalidOptionFields(fields);
   const missingMaterials = getRequiredMaterials(fields)

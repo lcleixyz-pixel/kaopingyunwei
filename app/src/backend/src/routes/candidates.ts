@@ -3,6 +3,10 @@
 // ═══════════════════════════════════════════════════
 
 import { Router } from 'express';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import multer from 'multer';
+import yazl from 'yazl';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
@@ -22,12 +26,19 @@ import {
   renderCandidateInfoXls,
   validateRegistrationGate,
 } from '../services/candidateRegistration.js';
+import { CandidatePhotoError, processCandidatePhoto } from '../services/candidatePhotos.js';
 import { canAddCandidateToPlan, isRegistrationClosed, normalizeLevelLabel } from '../services/phase1Rules.js';
 import { getRejectedCandidateDisposition } from '../services/prospectiveCandidates.js';
 
 const router = Router();
 
 router.use(authenticate);
+
+const PRIVATE_DATA_DIR = path.resolve(process.cwd(), 'data', 'private');
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+});
 
 const candidateSchema = z.object({
   planId: z.string().uuid(),
@@ -98,6 +109,7 @@ router.get('/', async (req, res) => {
       return {
         ...c,
         idCard: canViewSensitive ? idCard : maskIdCard(c.idCard),
+        photo: c.photo ? candidatePhotoUrl(c.id) : null,
         phone: canViewSensitive
           ? c.phone
           : c.phone
@@ -204,6 +216,7 @@ router.post('/', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF', 'SYS_ADMIN'), asyn
     });
     const registrationFields = mergeRegistrationDefaults(incomingFields, defaults);
     const materials = normalizeMaterials(data.materials);
+    materials.photo = false;
 
     const registrationProfile = await prisma.candidateRegistrationProfile.create({
       data: {
@@ -226,6 +239,7 @@ router.post('/', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF', 'SYS_ADMIN'), asyn
       idCard,
       registrationProfile: buildRegistrationProfileResponse({
         ...candidate,
+        photo: null,
         idCard,
         registrationProfile,
       }, req.userRole),
@@ -263,35 +277,7 @@ router.get('/export', async (req, res) => {
       return;
     }
 
-    const candidates = await prisma.candidate.findMany({
-      where: {
-        planId: plan.id,
-        tenantId: plan.tenantId,
-        status: 'APPROVED',
-      },
-      orderBy: { createdAt: 'asc' },
-      include: {
-        plan: {
-          include: { tenant: true },
-        },
-        registrationProfile: true,
-      },
-    });
-
-    const exportCandidates = candidates
-      .map((candidate) => {
-        const idCard = decrypt(candidate.idCard);
-        const profile = buildRegistrationProfileResponse({ ...candidate, idCard }, req.userRole);
-        const registrationFields = profile.registrationFields;
-        const gate = validateRegistrationGate({
-          registrationFields,
-          materials: profile.materials,
-          candidateStatus: candidate.status,
-        });
-        return { candidate, registrationFields, gate };
-      })
-      .filter((item) => item.gate.isEligible)
-      .map((item) => ({ registrationFields: item.registrationFields }));
+    const { exportCandidates } = await buildCandidateExportRows(plan.id, plan.tenantId, req.userRole);
 
     if (exportCandidates.length === 0) {
       error(res, 'NO_EXPORTABLE_CANDIDATES', '没有符合导出条件的考生：需补全模板必填项、材料齐全并审核通过', 400);
@@ -318,6 +304,216 @@ router.get('/export', async (req, res) => {
   } catch (err) {
     console.error('Export candidates error:', err);
     error(res, 'INTERNAL_ERROR', '导出考生报名表失败', 500);
+  }
+});
+
+/**
+ * GET /api/candidates/export-package — 按计划导出报名表和身份证命名照片 ZIP
+ */
+router.get('/export-package', async (req, res) => {
+  try {
+    const planId = typeof req.query.planId === 'string' ? req.query.planId : undefined;
+
+    if (!planId) {
+      error(res, 'VALIDATION_ERROR', '缺少计划ID', 400);
+      return;
+    }
+
+    const plan = await prisma.examPlan.findFirst({
+      where: {
+        id: planId,
+        ...tenantWhereForRead(req),
+      },
+      include: { tenant: true },
+    });
+
+    if (!plan) {
+      error(res, 'NOT_FOUND', '考评计划不存在', 404);
+      return;
+    }
+
+    const { rows, exportCandidates, missingPhotoCandidates } = await buildCandidateExportRows(plan.id, plan.tenantId, req.userRole);
+
+    if (missingPhotoCandidates.length > 0) {
+      error(res, 'MISSING_CANDIDATE_PHOTOS', `以下考生缺少证件照：${missingPhotoCandidates.map((item) => item.name).join('、')}`, 400, JSON.stringify({
+        candidates: missingPhotoCandidates,
+      }));
+      return;
+    }
+
+    if (exportCandidates.length === 0) {
+      error(res, 'NO_EXPORTABLE_CANDIDATES', '没有符合导出条件的考生：需补全模板必填项、材料齐全并审核通过', 400);
+      return;
+    }
+
+    const workbook = renderCandidateInfoXls(exportCandidates);
+    const zip = new yazl.ZipFile();
+    zip.addBuffer(workbook, `${sanitizeFilename(plan.title)}-考生信息模板.xls`);
+
+    for (const row of rows) {
+      if (!row.photoPath) continue;
+      zip.addFile(resolvePrivatePath(row.photoPath), `photos/${sanitizeFilename(row.idCard)}.jpg`);
+    }
+
+    await recordAudit(req, {
+      action: 'CANDIDATE_EXPORT_PACKAGE',
+      target: 'Candidate',
+      targetId: plan.id,
+      newValue: {
+        planId: plan.id,
+        count: exportCandidates.length,
+        format: 'zip',
+      },
+    });
+
+    const fileName = `${sanitizeFilename(plan.title)}-考生资料包.zip`;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    zip.outputStream.on('error', (err) => {
+      console.error('Export candidate ZIP stream error:', err);
+      if (!res.headersSent) {
+        error(res, 'INTERNAL_ERROR', '导出考生资料包失败', 500);
+      } else {
+        res.destroy(err);
+      }
+    });
+    zip.outputStream.pipe(res);
+    zip.end();
+  } catch (err) {
+    console.error('Export candidate package error:', err);
+    error(res, 'INTERNAL_ERROR', '导出考生资料包失败', 500);
+  }
+});
+
+/**
+ * GET /api/candidates/:id/photo — 鉴权预览一寸证件照
+ */
+router.get('/:id/photo', async (req, res) => {
+  try {
+    const candidate = await prisma.candidate.findFirst({
+      where: { id: String(req.params.id), ...tenantWhereForRead(req) },
+      select: { photo: true },
+    });
+
+    if (!candidate?.photo) {
+      error(res, 'NOT_FOUND', '证件照不存在', 404);
+      return;
+    }
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.sendFile(resolvePrivatePath(candidate.photo));
+  } catch (err) {
+    console.error('Get candidate photo error:', err);
+    error(res, 'INTERNAL_ERROR', '获取证件照失败', 500);
+  }
+});
+
+/**
+ * POST /api/candidates/:id/photo — 上传或替换指定考生一寸证件照
+ */
+router.post('/:id/photo', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), photoUpload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      error(res, 'VALIDATION_ERROR', '请选择要上传的证件照', 400);
+      return;
+    }
+
+    const candidate = await prisma.candidate.findFirst({
+      where: req.userRole === 'SYS_ADMIN' ? { id: String(req.params.id) } : { id: String(req.params.id), tenantId: req.tenantId! },
+      include: {
+        plan: { include: { tenant: true } },
+        registrationProfile: true,
+      },
+    });
+
+    if (!candidate) {
+      error(res, 'NOT_FOUND', '考生不存在', 404);
+      return;
+    }
+
+    const processed = await processCandidatePhoto(req.file.buffer);
+    const relativePath = candidatePhotoRelativePath(candidate.tenantId, candidate.id);
+    const outputPath = resolvePrivatePath(relativePath);
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, processed.buffer);
+
+    const updated = await prisma.candidate.update({
+      where: { id: candidate.id },
+      data: { photo: relativePath },
+      include: {
+        plan: { include: { tenant: true } },
+        registrationProfile: true,
+      },
+    });
+
+    await recordAudit(req, {
+      action: 'CANDIDATE_PHOTO_UPLOAD',
+      target: 'Candidate',
+      targetId: candidate.id,
+      oldValue: { photo: candidate.photo ? 'uploaded' : null },
+      newValue: { photo: 'uploaded', size: processed.size, width: processed.width, height: processed.height },
+    });
+
+    success(res, {
+      candidate: sanitizeCandidateForResponse(updated, req.userRole),
+      photo: {
+        url: `/api/candidates/${updated.id}/photo`,
+        size: processed.size,
+        width: processed.width,
+        height: processed.height,
+      },
+    });
+  } catch (err) {
+    if (err instanceof CandidatePhotoError) {
+      error(res, err.code, err.message, err.statusCode);
+      return;
+    }
+    console.error('Upload candidate photo error:', err);
+    error(res, 'INTERNAL_ERROR', '上传证件照失败', 500);
+  }
+});
+
+/**
+ * DELETE /api/candidates/:id/photo — 删除指定考生证件照
+ */
+router.delete('/:id/photo', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), async (req, res) => {
+  try {
+    const candidate = await prisma.candidate.findFirst({
+      where: req.userRole === 'SYS_ADMIN' ? { id: String(req.params.id) } : { id: String(req.params.id), tenantId: req.tenantId! },
+      include: {
+        plan: { include: { tenant: true } },
+        registrationProfile: true,
+      },
+    });
+
+    if (!candidate) {
+      error(res, 'NOT_FOUND', '考生不存在', 404);
+      return;
+    }
+
+    await removePrivateFileIfSafe(candidate.photo);
+
+    const updated = await prisma.candidate.update({
+      where: { id: candidate.id },
+      data: { photo: null },
+      include: {
+        plan: { include: { tenant: true } },
+        registrationProfile: true,
+      },
+    });
+
+    await recordAudit(req, {
+      action: 'CANDIDATE_PHOTO_DELETE',
+      target: 'Candidate',
+      targetId: candidate.id,
+      oldValue: { photo: candidate.photo ? 'uploaded' : null },
+      newValue: { photo: null },
+    });
+
+    success(res, sanitizeCandidateForResponse(updated, req.userRole));
+  } catch (err) {
+    console.error('Delete candidate photo error:', err);
+    error(res, 'INTERNAL_ERROR', '删除证件照失败', 500);
   }
 });
 
@@ -385,6 +581,7 @@ router.put('/:id/registration-profile', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'
       defaults,
     );
     const materials = normalizeMaterials(result.data.materials || oldProfile.materials);
+    materials.photo = Boolean(candidate.photo);
     const profile = await prisma.candidateRegistrationProfile.upsert({
       where: { candidateId: id },
       update: {
@@ -413,6 +610,7 @@ router.put('/:id/registration-profile', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'
           registrationFields,
           materials,
           candidateStatus: candidate.status,
+          photoUploaded: Boolean(candidate.photo),
         }),
       },
     });
@@ -463,6 +661,7 @@ router.post('/:id/approve', requireRoles('BRANCH_ADMIN'), async (req, res) => {
         registrationFields: profile.registrationFields,
         materials: profile.materials,
         requireApproved: false,
+        photoUploaded: Boolean(oldCandidate.photo),
       });
 
       if (!gate.isEligible) {
@@ -592,15 +791,129 @@ function maskIdCard(value: string): string {
   return idCard.length > 8 ? `${idCard.slice(0, 4)}****${idCard.slice(-4)}` : idCard;
 }
 
+function candidatePhotoUrl(candidateId: string): string {
+  return `/api/candidates/${encodeURIComponent(candidateId)}/photo`;
+}
+
+function candidatePhotoRelativePath(tenantId: string, candidateId: string): string {
+  return path.posix.join('candidate-photos', sanitizePathSegment(tenantId), `${sanitizePathSegment(candidateId)}.jpg`);
+}
+
+function sanitizePathSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, '_') || 'unknown';
+}
+
+function resolvePrivatePath(relativePath: string): string {
+  const resolved = path.resolve(PRIVATE_DATA_DIR, relativePath);
+  if (!resolved.startsWith(`${PRIVATE_DATA_DIR}${path.sep}`)) {
+    throw new Error('Invalid private file path');
+  }
+  return resolved;
+}
+
+async function privateFileExists(relativePath?: string | null): Promise<boolean> {
+  if (!relativePath) return false;
+  try {
+    await fs.access(resolvePrivatePath(relativePath));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function removePrivateFileIfSafe(relativePath?: string | null): Promise<void> {
+  if (!relativePath) return;
+  try {
+    await fs.rm(resolvePrivatePath(relativePath), { force: true });
+  } catch {
+    // Legacy or malformed paths should not block clearing the database pointer.
+  }
+}
+
+function sanitizeCandidateForResponse(candidate: any, role?: string) {
+  const canViewSensitive = canReadAcrossTenants(role)
+    || role === 'BRANCH_ADMIN'
+    || role === 'BRANCH_STAFF';
+  const idCard = decrypt(candidate.idCard);
+  return {
+    ...candidate,
+    idCard: canViewSensitive ? idCard : idCard.length > 8 ? `${idCard.slice(0, 4)}****${idCard.slice(-4)}` : idCard,
+    photo: candidate.photo ? candidatePhotoUrl(candidate.id) : null,
+    registrationProfile: buildRegistrationProfileResponse({ ...candidate, idCard }, role),
+  };
+}
+
+async function buildCandidateExportRows(planId: string, tenantId: string, role?: string) {
+  const candidates = await prisma.candidate.findMany({
+    where: {
+      planId,
+      tenantId,
+      status: 'APPROVED',
+    },
+    orderBy: { createdAt: 'asc' },
+    include: {
+      plan: {
+        include: { tenant: true },
+      },
+      registrationProfile: true,
+    },
+  });
+
+  const rows: Array<{ id: string; name: string; idCard: string; photoPath: string; registrationFields: Record<string, string> }> = [];
+  const exportCandidates: Array<{ registrationFields: Record<string, string> }> = [];
+  const missingPhotoCandidates: Array<{ id: string; name: string; idCard: string }> = [];
+
+  for (const candidate of candidates) {
+    const idCard = decrypt(candidate.idCard);
+    const profile = buildRegistrationProfileResponse({ ...candidate, idCard }, role);
+    const wouldBeEligibleWithPhoto = validateRegistrationGate({
+      registrationFields: profile.registrationFields,
+      materials: profile.materials,
+      candidateStatus: candidate.status,
+      photoUploaded: true,
+    });
+    const hasPhotoFile = await privateFileExists(candidate.photo);
+    if (wouldBeEligibleWithPhoto.isEligible && !hasPhotoFile) {
+      missingPhotoCandidates.push({ id: candidate.id, name: candidate.name, idCard });
+      continue;
+    }
+
+    const gate = validateRegistrationGate({
+      registrationFields: profile.registrationFields,
+      materials: profile.materials,
+      candidateStatus: candidate.status,
+      photoUploaded: hasPhotoFile,
+    });
+    if (!gate.isEligible || !candidate.photo) continue;
+
+    rows.push({
+      id: candidate.id,
+      name: candidate.name,
+      idCard,
+      photoPath: candidate.photo,
+      registrationFields: profile.registrationFields,
+    });
+    exportCandidates.push({ registrationFields: profile.registrationFields });
+  }
+
+  return { rows, exportCandidates, missingPhotoCandidates };
+}
+
+function sanitizeFilename(value: string): string {
+  return value.trim().replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ') || '未命名';
+}
+
 function buildRegistrationProfileResponse(candidate: any, role?: string) {
   const defaults = defaultRegistrationFieldsFromCandidate(candidate);
   const profile = candidate.registrationProfile;
   const registrationFields = mergeRegistrationDefaults(parseJson(profile?.fieldsJson), defaults);
   const materials = normalizeMaterials(parseJson(profile?.materialsJson));
+  materials.photo = Boolean(candidate.photo);
   const completeness = validateRegistrationGate({
     registrationFields,
     materials,
     candidateStatus: candidate.status,
+    photoUploaded: Boolean(candidate.photo),
   });
 
   return filterRegistrationProfileForRole({

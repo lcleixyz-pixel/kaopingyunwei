@@ -55,7 +55,20 @@ const router = Router();
 router.use(authenticate);
 
 const dataFilesDir = path.resolve(process.cwd(), 'data/files');
+const privateDataDir = path.resolve(process.cwd(), 'data', 'private');
 const certificateUploadDir = path.join(dataFilesDir, 'certificates');
+const certificatePhotoPrintField: CertificatePrintTemplateDefinition['fields'][number] = {
+  id: 'photo',
+  type: 'image',
+  label: '证件照',
+  source: 'candidate.photo',
+  xMm: 35,
+  yMm: 60,
+  widthMm: 25,
+  heightMm: 35,
+  fontSize: 10,
+  align: 'center',
+};
 
 const importUpload = multer({
   storage: multer.memoryStorage(),
@@ -1572,6 +1585,13 @@ router.get('/exports/print-record/:id/certificates.pdf', async (req, res) => {
     });
     const calibration = parseCertificatePrintCalibration(req);
     const template = await getCertificatePrintTemplate();
+    const missingPhotos = await getMissingCertificatePrintPhotos(certificates);
+    if (missingPhotos.length > 0) {
+      error(res, 'MISSING_CANDIDATE_PHOTOS', `以下考生缺少证件照：${missingPhotos.map((item) => item.name).join('、')}`, 400, JSON.stringify({
+        candidates: missingPhotos,
+      }));
+      return;
+    }
     sendPdf(
       res,
       `证书套打-${record.id}.pdf`,
@@ -2273,6 +2293,33 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+async function getMissingCertificatePrintPhotos(
+  certificates: Array<{ id: string; candidate: { name: string; idCard: string; photo?: string | null } }>,
+): Promise<Array<{ id: string; name: string; idCard: string }>> {
+  const missing: Array<{ id: string; name: string; idCard: string }> = [];
+  for (const certificate of certificates) {
+    const photoPath = certificate.candidate.photo;
+    if (!photoPath) {
+      missing.push({ id: certificate.id, name: certificate.candidate.name, idCard: safeDecrypt(certificate.candidate.idCard) });
+      continue;
+    }
+    try {
+      await fs.access(resolvePrivateCandidatePhotoPath(photoPath));
+    } catch {
+      missing.push({ id: certificate.id, name: certificate.candidate.name, idCard: safeDecrypt(certificate.candidate.idCard) });
+    }
+  }
+  return missing;
+}
+
+function resolvePrivateCandidatePhotoPath(relativePath: string): string {
+  const resolved = path.resolve(privateDataDir, relativePath);
+  if (!resolved.startsWith(`${privateDataDir}${path.sep}`)) {
+    throw new RouteError('INVALID_PHOTO_PATH', '证件照路径不合法', 500);
+  }
+  return resolved;
+}
+
 async function getStandardPdfTemplate(key: 'CERT_SUPPLY_REQUEST' | 'CERT_PRINT_SIGNATURE' | 'CERT_DESTROY_BATCH'): Promise<StandardPdfTemplateDefinition> {
   const template = await resolvePdfTemplateDefinition(prisma.pdfTemplate, key);
   if (template.kind !== 'standard') {
@@ -2285,6 +2332,12 @@ async function getCertificatePrintTemplate(): Promise<CertificatePrintTemplateDe
   const template = await resolvePdfTemplateDefinition(prisma.pdfTemplate, 'CERTIFICATE_PRINT');
   if (template.kind !== 'certificate-print') {
     throw new RouteError('PDF_TEMPLATE_INVALID', '证书套打模板类型不匹配', 500);
+  }
+  if (!template.fields.some((field) => field.type === 'image' && field.source === 'candidate.photo')) {
+    return {
+      ...template,
+      fields: [certificatePhotoPrintField, ...template.fields],
+    };
   }
   return template;
 }
@@ -2359,6 +2412,7 @@ function renderCertificatePrintPdf(
     candidate: {
       name: string;
       idCard: string;
+      photo?: string | null;
       plan: { occupation: string; profession: string; level: string };
     };
   }>,
@@ -2374,6 +2428,7 @@ function renderCertificatePrintPdf(
       candidate: {
         name: certificate.candidate.name,
         idCard: safeDecrypt(certificate.candidate.idCard),
+        photo: certificate.candidate.photo ? resolvePrivateCandidatePhotoPath(certificate.candidate.photo) : '',
         plan: certificate.candidate.plan,
       },
       idTypeLabel: '居民身份证',

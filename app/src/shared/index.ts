@@ -772,6 +772,7 @@ export interface CertificatePrintTemplateDefinition {
   page: PdfTemplatePageDefinition & { layout: 'landscape' };
   fields: Array<{
     id: string;
+    type?: 'text' | 'image';
     label: string;
     source: string;
     xMm: number;

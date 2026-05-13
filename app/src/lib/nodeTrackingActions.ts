@@ -16,7 +16,6 @@ const COMPLETABLE_NODE_TYPES = new Set<NodeType>([
   'EXAM_PREPARE',
   'EXAM_DAY',
   'SCORE_PUBLISH',
-  'COMPLETE',
 ]);
 
 const BUSINESS_NODE_ACTIONS: Partial<Record<NodeType, Extract<NodeTrackingAction, { type: 'navigate' }>>> = {
@@ -39,6 +38,11 @@ const BUSINESS_NODE_ACTIONS: Partial<Record<NodeType, Extract<NodeTrackingAction
     type: 'navigate',
     label: '进入证书管理',
     href: '/certificates',
+  },
+  COMPLETE: {
+    type: 'navigate',
+    label: '进入档案管理',
+    href: '/archives',
   },
 };
 
