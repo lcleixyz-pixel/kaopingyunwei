@@ -43,7 +43,7 @@ const PDF_HORIZONTAL_PUNCTUATION_REPLACEMENTS: Record<string, string> = {
 };
 
 export function normalizePdfText(text: string): string {
-  return text.replace(/[（），、。：；？！《》“”‘’～－—　]/g, (match) => PDF_HORIZONTAL_PUNCTUATION_REPLACEMENTS[match] || match);
+  return text.replace(/[（），、。：；？！《》“”‘’～－—\u3000]/g, (match) => PDF_HORIZONTAL_PUNCTUATION_REPLACEMENTS[match] || match);
 }
 
 export function renderStandardPdfTemplate(
