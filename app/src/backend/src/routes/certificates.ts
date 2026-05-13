@@ -27,6 +27,7 @@ import { applyPdfFont, PdfFontMissingError, requireCertificatePrintFont, require
 import { getWorkdayCalendarConfig } from '../services/workdayCalendars.js';
 import { publishedPlanWhereForRead, tenantWhereForRead } from '../services/accessScope.js';
 import { resolvePdfTemplateDefinition, type CertificatePrintTemplateDefinition, type StandardPdfTemplateDefinition } from '../services/pdfTemplates.js';
+import { formatTenantOfficialName } from '../services/tenantOfficialNames.js';
 import {
   pdfDocumentOptionsFromTemplate,
   renderCertificatePrintTemplate,
@@ -1487,7 +1488,7 @@ router.get('/exports/ledger.xlsx', async (req, res) => {
     });
 
     const rows = ledgers.map((row) => ({
-      机构: row.tenant.name,
+      机构: formatTenantOfficialName(row.tenant),
       物品: itemTypeLabel(row.itemType),
       流水类型: row.movementType,
       数量: row.quantity,
@@ -1670,7 +1671,7 @@ router.get('/exports/stocktakes.xlsx', async (req, res) => {
       include: { tenant: true },
     });
     const rows = records.map((record) => ({
-      机构: record.tenant.name,
+      机构: formatTenantOfficialName(record.tenant),
       物品: itemTypeLabel(record.itemType),
       盘点类型: record.stocktakeType,
       账面数量: record.bookBalance,
@@ -2345,7 +2346,7 @@ async function getCertificatePrintTemplate(): Promise<CertificatePrintTemplateDe
 function renderSupplyRequestPdf(
   doc: PDFKit.PDFDocument,
   request: {
-    tenant: { name: string; contactPhone?: string | null; address?: string | null };
+    tenant: { code?: string | null; name: string; contactPhone?: string | null; address?: string | null };
     blankCertQuantity?: number | null;
     shellQuantity?: number | null;
     responsiblePerson?: string | null;
@@ -2358,7 +2359,7 @@ function renderSupplyRequestPdf(
   template: StandardPdfTemplateDefinition,
 ): void {
   renderStandardPdfTemplate(doc, template, {
-    tenant: { name: request.tenant.name },
+    tenant: { name: formatTenantOfficialName(request.tenant) },
     requestedAt: formatDateOnly(request.requestedAt),
     blankCertQuantity: request.blankCertQuantity || 0,
     shellQuantity: request.shellQuantity || 0,
@@ -2441,7 +2442,7 @@ function renderCertificatePrintPdf(
 
 function renderDestroyBatchPdf(
   doc: PDFKit.PDFDocument,
-  batch: { title: string; responsiblePerson: string | null; notes: string | null; createdAt: Date; voidRecords: Array<{ tenant: { name: string }; plan?: { title: string } | null; itemType: CertificateItemType; quantity: number; reason: string }> },
+  batch: { title: string; responsiblePerson: string | null; notes: string | null; createdAt: Date; voidRecords: Array<{ tenant: { code?: string | null; name: string }; plan?: { title: string } | null; itemType: CertificateItemType; quantity: number; reason: string }> },
   template: StandardPdfTemplateDefinition,
 ): void {
   renderStandardPdfTemplate(doc, template, {
@@ -2452,7 +2453,7 @@ function renderDestroyBatchPdf(
       notes: batch.notes || '',
     },
     voidRecords: batch.voidRecords.map((record) => ({
-      tenant: { name: record.tenant.name },
+      tenant: { name: formatTenantOfficialName(record.tenant) },
       plan: { title: record.plan?.title || '' },
       itemTypeLabel: itemTypeLabel(record.itemType),
       quantity: record.quantity,
@@ -2462,7 +2463,7 @@ function renderDestroyBatchPdf(
 }
 
 function renderReissueRequestDoc(request: {
-  tenant: { name: string };
+  tenant: { code?: string | null; name: string };
   applicantName: string;
   applicantPhone: string | null;
   applicantIdCard: string | null;
@@ -2474,7 +2475,7 @@ function renderReissueRequestDoc(request: {
   status: string;
 }): string {
   return renderWordDocument('职业技能等级证书补办申请表', [
-    ['申请机构', request.tenant.name],
+    ['申请机构', formatTenantOfficialName(request.tenant)],
     ['申请人', request.applicantName],
     ['联系电话', request.applicantPhone || ''],
     ['身份证号', request.applicantIdCard || ''],

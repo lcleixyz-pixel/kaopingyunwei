@@ -1,3 +1,5 @@
+import { formatTenantOfficialName } from './tenantOfficialNames.js';
+
 export const ARCHIVE_REPORT_HEADERS = [
   '姓名',
   '证件类型',
@@ -24,7 +26,7 @@ export interface ArchiveCertificateLike {
     idCard: string;
     registrationProfile?: { fieldsJson?: string | null } | null;
     plan: {
-      tenant: { name: string };
+      tenant: { code?: string | null; name: string };
       occupation: string;
       profession: string;
       level: string;
@@ -73,7 +75,7 @@ export function buildArchiveReportRows(certificates: ArchiveCertificateLike[]): 
       职业技能等级: normalizeLevelNumber(certificate.candidate.plan.level),
       证书编号: normalizeText(certificate.certNo),
       发证日期: formatDateOnly(certificate.certDisplayIssueDate),
-      评价机构: normalizeText(certificate.candidate.plan.tenant.name),
+      评价机构: formatTenantOfficialName(certificate.candidate.plan.tenant),
       发证机构: DEFAULT_ISSUER,
     };
   });

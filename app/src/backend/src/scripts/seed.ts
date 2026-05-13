@@ -4,6 +4,7 @@
 
 import { prisma } from '../lib/prisma.js';
 import { hashPassword } from '../utils/crypto.js';
+import { filingNameForTenantCode } from '../services/tenantOfficialNames.js';
 
 async function seed(): Promise<void> {
   console.log('🌱 开始初始化数据库...');
@@ -19,7 +20,7 @@ async function seed(): Promise<void> {
   const hq = await prisma.tenant.create({
     data: {
       code: 'NGTCS0013',
-      name: '北京总部',
+      name: filingNameForTenantCode('NGTCS0013') || 'S0013',
       type: 'HQ',
       status: 'ACTIVE',
       contactName: '总部管理员',
@@ -32,7 +33,7 @@ async function seed(): Promise<void> {
   const beijingOps = await prisma.tenant.create({
     data: {
       code: 'BJ001',
-      name: '北京考评中心',
+      name: filingNameForTenantCode('BJ001') || 'S0013',
       type: 'BRANCH',
       status: 'ACTIVE',
       contactName: '北京考评管理员',
@@ -43,7 +44,7 @@ async function seed(): Promise<void> {
   const shenzhen = await prisma.tenant.create({
     data: {
       code: 'SZ001',
-      name: '深圳分支机构',
+      name: filingNameForTenantCode('SZ001') || 'S001344006001',
       type: 'BRANCH',
       status: 'ACTIVE',
       contactName: '深圳管理员',
@@ -54,7 +55,7 @@ async function seed(): Promise<void> {
   const xinjiang = await prisma.tenant.create({
     data: {
       code: 'XJ001',
-      name: '新疆分支机构',
+      name: filingNameForTenantCode('XJ001') || 'S001365000001',
       type: 'BRANCH',
       status: 'ACTIVE',
       contactName: '新疆管理员',
@@ -65,7 +66,7 @@ async function seed(): Promise<void> {
   const yunnan = await prisma.tenant.create({
     data: {
       code: 'YN001',
-      name: '云南分支机构',
+      name: filingNameForTenantCode('YN001') || 'S001353000008',
       type: 'BRANCH',
       status: 'ACTIVE',
       contactName: '云南管理员',

@@ -199,21 +199,21 @@ function sampleStandardContext(key: PdfTemplateKey): Record<string, unknown> {
     return {
       batch: { title: '2026年5月证书作废销毁批次', responsiblePerson: '赵老师', createdAt: '2026-05-13', notes: '打印污损登记销毁' },
       voidRecords: [
-        { tenant: { name: '北京分部' }, plan: { title: '2026年5月认定计划' }, itemTypeLabel: '空白证书', quantity: 1, reason: '打印污损' },
-        { tenant: { name: '北京分部' }, plan: { title: '2026年5月认定计划' }, itemTypeLabel: '证书壳', quantity: 1, reason: '运输破损' },
+        { tenant: { name: '国家珠宝玉石首饰检验集团有限公司' }, plan: { title: '2026年5月认定计划' }, itemTypeLabel: '空白证书', quantity: 1, reason: '打印污损' },
+        { tenant: { name: '国家珠宝玉石首饰检验集团有限公司' }, plan: { title: '2026年5月认定计划' }, itemTypeLabel: '证书壳', quantity: 1, reason: '运输破损' },
       ],
     };
   }
   return {
-    tenant: { name: '' },
-    requestedAt: '',
-    blankCertQuantity: '',
-    shellQuantity: '',
-    responsiblePerson: '',
-    contactName: '',
-    contactPhone: '',
-    mailingAddress: '',
-    notes: '',
+    tenant: { name: '国家珠宝玉石首饰检验集团有限公司' },
+    requestedAt: '2026-05-13',
+    blankCertQuantity: 20,
+    shellQuantity: 20,
+    responsiblePerson: '王老师',
+    contactName: '李老师',
+    contactPhone: '13800000000',
+    mailingAddress: '北京市朝阳区示例路 1 号',
+    notes: '用于2026年5月认定计划',
   };
 }
 
@@ -236,7 +236,7 @@ function sampleCertificateContext(): Record<string, unknown> {
 
 function sampleTable5Batch() {
   return {
-    tenant: { name: '北京分部' },
+    tenant: { name: '国家珠宝玉石首饰检验集团有限公司' },
     unitLeader: '赵老师',
     informationManager: '钱老师',
     title: '2026年5月职业技能等级证书上报批次',

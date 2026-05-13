@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import type { Candidate, ExamPlan, Tenant } from '@prisma/client';
 import { formatDate } from '../utils/dateUtils.js';
 import { normalizeLevelLabel } from './phase1Rules.js';
+import { formatTenantOfficialName } from './tenantOfficialNames.js';
 
 export interface ExportTemplateMapping {
   field: string;
@@ -129,7 +130,7 @@ function writeCell(sheet: XLSX.WorkSheet, cell: string, value: string | number):
 
 function resolveCandidateField(candidate: CandidateForExport, field: string): string | number {
   const values: Record<string, string | number> = {
-    'tenant.name': candidate.plan.tenant.name,
+    'tenant.name': formatTenantOfficialName(candidate.plan.tenant),
     'plan.title': candidate.plan.title,
     'plan.occupation': candidate.plan.occupation,
     'plan.profession': candidate.plan.profession,

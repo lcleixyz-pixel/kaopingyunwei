@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { getDefaultPdfTemplateDefinition } from './pdfTemplates.js';
-import { renderStandardPdfTemplate, renderTable5PdfTemplate } from './pdfTemplateRenderer.js';
+import { normalizePdfText, renderPdfTable, renderStandardPdfTemplate, renderTable5PdfTemplate } from './pdfTemplateRenderer.js';
 
 class RecordingPdfDocument {
   x = 42;
   y = 42;
-  page = { width: 595.28, height: 841.89 };
+  page = { width: 595.28, height: 841.89, margins: { bottom: 42 } };
   calls: Array<{ type: string; text?: string; x?: number; y?: number; width?: number; height?: number }> = [];
+  private currentFontSize = 10;
 
-  fontSize(): this {
+  fontSize(size?: number): this {
+    if (typeof size === 'number') this.currentFontSize = size;
     return this;
   }
 
@@ -48,9 +50,22 @@ class RecordingPdfDocument {
     this.y += amount * 12;
     return this;
   }
+
+  heightOfString(text: string, options: { width: number; lineGap?: number }): number {
+    const charsPerLine = Math.max(1, Math.floor(options.width / Math.max(1, this.currentFontSize)));
+    const lines = text.split('\n').reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
+    return lines * (this.currentFontSize + (options.lineGap ?? 0));
+  }
 }
 
 describe('PDF template renderer', () => {
+  it('normalizes full-width punctuation that renders as vertical glyphs in Kaiti TTC fonts', () => {
+    assert.equal(
+      normalizePdfText('新疆分支机构（新增1条，111111111111）负责人签字：确认。'),
+      '新疆分支机构(新增1条,111111111111)负责人签字:确认.',
+    );
+  });
+
   it('renders the supply request default as a bordered form table', () => {
     const definition = getDefaultPdfTemplateDefinition('CERT_SUPPLY_REQUEST');
     if (definition.kind !== 'standard') throw new Error('expected standard template');
@@ -76,8 +91,8 @@ describe('PDF template renderer', () => {
     assert.match(text, /申请空白证书\n数量/);
     assert.match(text, /申请证书壳\n数量/);
     assert.match(text, /分支机构\n确认/);
-    assert.match(text, /负责人签字：/);
-    assert.match(text, /单位盖章：/);
+    assert.match(text, /负责人签字:/);
+    assert.match(text, /单位盖章:/);
   });
 
   it('renders every Table 5 summary row without an overflow note', () => {
@@ -116,5 +131,23 @@ describe('PDF template renderer', () => {
     assert.doesNotMatch(text, /仅显示前 2 项/);
     assert.doesNotMatch(text, /完整明细以数据表为准/);
     assert.notEqual(unitLeaderLabel?.y, informationManagerLabel?.y);
+  });
+
+  it('expands standard PDF table rows so long wrapped text stays inside borders', () => {
+    const doc = new RecordingPdfDocument();
+    renderPdfTable(
+      doc as unknown as PDFKit.PDFDocument,
+      ['机构', '物品', '原因'],
+      [
+        ['国家珠宝玉石首饰检验集团有限公司', '空白证书', '导出验证作废'],
+      ],
+      { widths: [95, 95, 95], headerSize: 10, bodySize: 9 },
+    );
+
+    const bodyRects = doc.calls.filter((call) => call.type === 'rect').slice(3);
+    assert.ok(bodyRects.length >= 3);
+    assert.ok((bodyRects[0].height || 0) > 28, 'expected wrapped body row to grow taller than the minimum row height');
+    assert.equal(bodyRects[0].height, bodyRects[1].height);
+    assert.equal(bodyRects[1].height, bodyRects[2].height);
   });
 });

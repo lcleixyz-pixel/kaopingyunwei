@@ -20,6 +20,7 @@ import { applyPdfFont, PdfFontMissingError, requireChinesePdfFont } from '../uti
 import { publishedPlanWhereForRead } from '../services/accessScope.js';
 import { resolvePdfTemplateDefinition, type Table5PdfTemplateDefinition } from '../services/pdfTemplates.js';
 import { pdfDocumentOptionsFromTemplate, renderTable5PdfTemplate } from '../services/pdfTemplateRenderer.js';
+import { formatTenantOfficialName } from '../services/tenantOfficialNames.js';
 import {
   ARCHIVE_REPORT_HEADERS,
   buildArchiveBatchDataType,
@@ -187,7 +188,7 @@ router.post('/batches', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async (req
         tenantId: req.tenantId!,
         batchNo: result.data.batchNo,
         title: normalizeText(result.data.title) || buildSuggestedArchiveBatchTitle({
-          tenantName: context.tenant.name,
+          tenantName: formatTenantOfficialName(context.tenant),
           batchNo: result.data.batchNo,
           recordCount: context.completeCertificates.length,
         }),
@@ -304,7 +305,7 @@ router.get('/batches/:id/table5.pdf', async (req, res) => {
     const template = await getTable5PdfTemplate();
     sendPdf(res, `表5-职业技能等级证书数据审核确认表-${batch.batchNo}.pdf`, (doc) => {
       renderTable5PdfTemplate(doc, template, {
-        tenant: batch.tenant,
+        tenant: { ...batch.tenant, name: formatTenantOfficialName(batch.tenant) },
         unitLeader: batch.unitLeader,
         informationManager: batch.informationManager,
         title: batch.title,

@@ -301,8 +301,8 @@ export default function Certificates() {
   });
 
   const [supplyForm, setSupplyForm] = useState({
-    blankCertQuantity: 50,
-    shellQuantity: 50,
+    blankCertQuantity: 0,
+    shellQuantity: 0,
     responsiblePerson: '',
     contactName: '',
     contactPhone: '',
@@ -501,7 +501,7 @@ export default function Certificates() {
       await apiClient.post<ApiResponse<SupplyRequest>>('/certificates/supply-requests', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      setSupplyForm({ blankCertQuantity: 50, shellQuantity: 50, responsiblePerson: '', contactName: '', contactPhone: '', mailingAddress: '', notes: '' });
+      setSupplyForm({ blankCertQuantity: 0, shellQuantity: 0, responsiblePerson: '', contactName: '', contactPhone: '', mailingAddress: '', notes: '' });
       setSupplyStampedFile(null);
     }, '申领单已提交');
   };
