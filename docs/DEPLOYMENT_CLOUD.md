@@ -62,6 +62,13 @@ openssl rand -base64 48
 
 注意：生产环境不能使用 `.env.example` 中的 `change-this-...` 占位值。后端启动时会拒绝默认密钥和占位密钥。
 
+生产环境还必须确认：
+
+- `CORS_ORIGIN` 是真实 HTTPS 域名，不能使用 `*`。
+- `.env` 不提交到 Git，不通过公开聊天、邮件附件或截图传播。
+- 当前仓库是 public，SQLite 数据库、上传文件、备份包和迁移包都不能放入仓库。
+- 详细安全基线见 `docs/DATA_SECURITY_BASELINE.md`。
+
 启动：
 
 ```bash
@@ -192,12 +199,18 @@ docker compose --env-file .env -f docker/docker-compose.yml up -d
 ## 上线后必须做
 
 1. 用 `admin / admin123` 首次登录。
-2. 立即修改默认管理员密码。
+2. 立即修改 `admin`、`hqadmin`、分支管理员和工作人员默认密码。
 3. 确认 `hqadmin`、分支管理员和工作人员账号权限正常。
 4. 打开仪表盘、报名资料、成绩、证书、档案、AI 运维、系统设置。
 5. 执行一次手动备份。
-6. 下载或导出一份备份到服务器外部位置。
-7. 保留 `.env`，但不要把 `.env` 上传到公共仓库或发给无关人员。
+6. 下载或导出一份备份到服务器外部位置，并确认外部位置不是公开链接。
+7. 删除不再需要的临时迁移包或备份下载文件。
+8. 保留 `.env`，但不要把 `.env` 上传到公共仓库或发给无关人员。
+9. 执行一次生产依赖审计；如果使用镜像源报 audit endpoint 不支持，改用官方 registry：
+
+```bash
+npm audit --omit=dev --registry=https://registry.npmjs.org
+```
 
 ## 上线验收命令
 
@@ -225,6 +238,10 @@ https://exam.example.com
 - 分支工作人员无系统设置入口。
 - `teststaff` 或分支工作人员访问 `/api/settings` 返回 403。
 - 未知 API 返回 JSON 404。
+- `.env` 中 `CORS_ORIGIN` 不是 `*`。
+- 默认账号密码已修改并记录在受控密码管理位置。
+- AI 运维备份可生成，且至少一份备份已复制到服务器外部位置。
+- `npm audit --omit=dev --registry=https://registry.npmjs.org` 的结果已记录；已知 `xlsx` 风险按 `docs/DATA_SECURITY_BASELINE.md` 管理。
 
 ## 常见问题
 

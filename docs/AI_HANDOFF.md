@@ -10,12 +10,13 @@
 4. `docs/API_CONVENTIONS.md`
 5. `docs/ACCEPTANCE_CHECKLIST.md`
 6. `docs/DECISIONS.md`
+7. `docs/DATA_SECURITY_BASELINE.md`
 
 本文件是项目当前状态的“交接班记录”。不要只依赖聊天上下文继续开发。
 
 ## 当前日期
 
-记录日期：2026-05-12
+记录日期：2026-05-16
 
 ## 当前阶段
 
@@ -65,6 +66,8 @@
   - `docs/DECISIONS.md`
 - 新增云服务器部署准入文档：
   - `docs/DEPLOYMENT_CLOUD.md`
+- 新增数据安全基线文档：
+  - `docs/DATA_SECURITY_BASELINE.md`
 - 已将 `app/README.md`、`app/.env.example`、`docs/ACCEPTANCE_CHECKLIST.md` 和 `docs/ROLE_MATRIX.md` 同步到当前云部署口径。
 - 顶层 `SKILL.md` 和 `exam-system/SKILL.md` 已标注为包含早期架构示例；Docker/云服务器/宝塔/备份恢复以 `docs/DEPLOYMENT_CLOUD.md` 和 `app/docker/docker-compose.yml` 为准。
 
@@ -129,6 +132,31 @@ Phase 1.3 节点追踪与报名阶段关闭：
 - 审核通过的考生资料再次保存前，前端会提示使用者确认本地上级部门业务系统信息已同步保持一致。
 
 ## 最近验证结果
+
+2026-05-16 本地远端同步、健康检查和数据安全文档更新：
+
+- GitHub 远端：`https://github.com/lcleixyz-pixel/kaopingyunwei.git`，仓库 `lcleixyz-pixel/kaopingyunwei`，默认分支 `main`，当前 visibility 为 public。
+- 本地同步状态：`main...origin/main` 为 `0 ahead / 0 behind`，开始执行前工作区干净。
+- 本轮只更新文档，不改业务代码、不升级依赖、不执行数据库 migration。
+- 新增 `docs/DATA_SECURITY_BASELINE.md`，记录生产密钥、默认账号、CORS、HTTPS、SQLite/上传文件/备份、迁移包、审计日志和依赖安全基线。
+- 已同步更新 `docs/DEPLOYMENT_CLOUD.md`、`docs/ACCEPTANCE_CHECKLIST.md` 和 `docs/DECISIONS.md`，把数据安全基线纳入部署、验收和架构决策。
+- `npm run check`：通过；前端 Vite 构建和后端 TypeScript 编译均通过。Vite 仍提示单个 JS chunk 超过 500 kB，属于性能优化项。
+- `npm run backend:test`：通过，32 个 suite、124 个测试。
+- `npm run lint`：通过。
+- `npx prisma migrate status --schema src/backend/prisma/schema.prisma`：通过，11 个 migrations，schema 与数据库一致。
+- `npm audit --omit=dev --json` 使用当前镜像源 `npmmirror` 失败，原因是镜像源未实现 npm audit endpoint。
+- `npm audit --omit=dev --registry=https://registry.npmjs.org --json`：返回 2 个生产依赖风险。`xlsx` 为 direct high，包含 SheetJS prototype pollution 和 ReDoS 公告，`fixAvailable: false`；`lodash` 为 indirect high，`fixAvailable: true`。
+- 处理口径：本轮不盲目替换 `xlsx`，因为 Excel 导入导出覆盖报名、成绩、证书、档案等核心业务路径；后续按依赖安全专项盘点使用点、补足测试覆盖，再评估替换或隔离方案。
+
+2026-05-16 登录安全加固：
+
+- 新增 `app/src/backend/src/services/loginRateLimit.ts`，实现内存级登录失败限流。
+- 限流键为 `tenantCode + username + IP`，大小写和空白会归一化。
+- 默认策略：5 分钟窗口内失败 5 次后，锁定 15 分钟。
+- `/api/auth/login` 在查库前检查限流；用户名不存在或密码错误都会累计失败，成功登录会清除该组合失败记录。
+- 被限流时返回 HTTP 429、错误码 `LOGIN_RATE_LIMITED`，并设置 `Retry-After` 响应头。
+- 新增 `app/src/backend/src/services/loginRateLimit.test.ts`，覆盖重复失败锁定、成功清除、窗口过期重新计数。
+- 验证：`node --import tsx --test src/backend/src/services/loginRateLimit.test.ts` 通过，3 个测试；`npm run backend:build` 通过。
 
 2026-05-12 投产验收回归：
 

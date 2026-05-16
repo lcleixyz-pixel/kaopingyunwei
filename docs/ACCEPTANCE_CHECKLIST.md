@@ -167,6 +167,30 @@ npm run backend:start
 - 分支工作人员看不到系统设置入口，或打开后被拒绝。
 - 系统管理员可执行 AI 运维操作。
 
+## 数据安全验收
+
+至少验证：
+
+- `.env` 已使用生产随机 `JWT_SECRET` 和 `ENCRYPTION_KEY`，且没有使用 `.env.example` 占位值。
+- 生产 `CORS_ORIGIN` 设置为真实 HTTPS 域名，不能使用 `*`。
+- 默认账号密码已修改，至少覆盖 `admin`、`hqadmin`、分支管理员和工作人员。
+- 登录失败限流有效：同一账号、租户和来源 IP 连续失败达到阈值后，`/api/auth/login` 返回 429、错误码 `LOGIN_RATE_LIMITED`，并带 `Retry-After` 响应头。
+- `.env`、SQLite 数据库、上传文件、备份包、迁移包没有进入 Git；当前仓库是 public 时尤其要确认。
+- AI 运维可生成备份，且至少一份备份已复制到服务器外部位置。
+- 至少抽测一次恢复流程或恢复预案：确认目标 volume、启动容器、访问 `/api/health`、登录并读取一条核心业务数据。
+- 运维导出、备份、恢复、下载等动作在审计日志中可追踪。
+- 运行官方 registry 依赖审计：
+
+```bash
+npm audit --omit=dev --registry=https://registry.npmjs.org
+```
+
+通过标准：
+
+- 审计结果已记录在 `docs/AI_HANDOFF.md` 或发布记录中。
+- 已知 `xlsx` 高危公告不盲目修复，按 `docs/DATA_SECURITY_BASELINE.md` 作为依赖安全专项处理。
+- 可自动修复的间接依赖风险需要单独评估影响后再升级，不能无测试直接 `npm audit fix`。
+
 ## Docker 验收
 
 如果机器具备 Docker：

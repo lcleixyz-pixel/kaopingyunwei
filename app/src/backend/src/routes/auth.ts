@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { hashPassword, verifyPassword, generateToken } from '../utils/crypto.js';
 import { success, error } from '../utils/response.js';
+import { loginRateLimiter } from '../services/loginRateLimit.js';
 
 const router = Router();
 
@@ -28,6 +29,17 @@ router.post('/login', async (req, res) => {
     }
 
     const { username, password, tenantCode } = result.data;
+    const loginIdentity = {
+      username,
+      tenantCode,
+      ip: clientIp(req),
+    };
+    const rateLimit = loginRateLimiter.check(loginIdentity);
+    if (rateLimit.limited) {
+      res.setHeader('Retry-After', String(rateLimit.retryAfterSeconds || 60));
+      error(res, 'LOGIN_RATE_LIMITED', '登录失败次数过多，请稍后再试', 429);
+      return;
+    }
 
     // 查找用户
     let user;
@@ -48,6 +60,7 @@ router.post('/login', async (req, res) => {
     }
 
     if (!user || !user.tenant) {
+      loginRateLimiter.recordFailure(loginIdentity);
       error(res, 'LOGIN_FAILED', '用户名或密码错误', 401);
       return;
     }
@@ -55,6 +68,7 @@ router.post('/login', async (req, res) => {
     // 验证密码
     const isValid = await verifyPassword(password, user.password);
     if (!isValid) {
+      loginRateLimiter.recordFailure(loginIdentity);
       error(res, 'LOGIN_FAILED', '用户名或密码错误', 401);
       return;
     }
@@ -73,6 +87,7 @@ router.post('/login', async (req, res) => {
 
     // 生成token
     const token = generateToken(user.id, user.tenantId, user.role);
+    loginRateLimiter.recordSuccess(loginIdentity);
 
     success(res, {
       token,
@@ -207,3 +222,11 @@ router.get('/me', async (req, res) => {
 });
 
 export default router;
+
+function clientIp(req: { ip?: string; headers: Record<string, string | string[] | undefined> }): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip || 'unknown-ip';
+}
