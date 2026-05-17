@@ -6,6 +6,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { authenticate } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import {
   canReadAcrossTenants,
   planTenantWhereForRead,
@@ -133,8 +134,7 @@ router.get('/', async (req, res) => {
       recentActivities,
     });
   } catch (err) {
-    console.error('Dashboard error:', err);
-    error(res, 'INTERNAL_ERROR', '获取仪表盘数据失败', 500);
+    respondWithFriendlyError(res, err, '获取仪表盘数据失败');
   }
 });
 
@@ -180,8 +180,7 @@ router.get('/reports', async (req, res) => {
       byQuarter: Array.from(byQuarter.values()).sort((a, b) => a.label.localeCompare(b.label)),
     });
   } catch (err) {
-    console.error('Dashboard reports error:', err);
-    error(res, 'INTERNAL_ERROR', '获取报表统计失败', 500);
+    respondWithFriendlyError(res, err, '获取报表统计失败');
   }
 });
 

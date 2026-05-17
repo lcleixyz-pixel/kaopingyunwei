@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { encrypt } from '../utils/crypto.js';
 import { recordAudit } from '../utils/audit.js';
 import {
@@ -69,8 +70,7 @@ router.get('/', async (req, res) => {
 
     success(res, candidates);
   } catch (err) {
-    console.error('Get prospective candidates error:', err);
-    error(res, 'INTERNAL_ERROR', '获取意向考生失败', 500);
+    respondWithFriendlyError(res, err, '获取意向考生失败');
   }
 });
 
@@ -80,7 +80,7 @@ router.post('/', async (req, res) => {
     const result = prospectiveCandidateSchema.safeParse(req.body);
 
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -103,8 +103,7 @@ router.post('/', async (req, res) => {
 
     success(res, candidate, 201);
   } catch (err) {
-    console.error('Create prospective candidate error:', err);
-    error(res, 'INTERNAL_ERROR', '新增意向考生失败', 500);
+    respondWithFriendlyError(res, err, '新增意向考生失败');
   }
 });
 
@@ -115,7 +114,7 @@ router.patch('/:id', async (req, res) => {
     const result = prospectiveCandidateUpdateSchema.safeParse(req.body);
 
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -144,8 +143,7 @@ router.patch('/:id', async (req, res) => {
 
     success(res, candidate);
   } catch (err) {
-    console.error('Update prospective candidate error:', err);
-    error(res, 'INTERNAL_ERROR', '保存意向考生失败', 500);
+    respondWithFriendlyError(res, err, '保存意向考生失败');
   }
 });
 
@@ -171,8 +169,7 @@ router.delete('/:id', requireRoles('BRANCH_ADMIN'), async (req, res) => {
 
     success(res, { message: '意向考生已删除' });
   } catch (err) {
-    console.error('Delete prospective candidate error:', err);
-    error(res, 'INTERNAL_ERROR', '删除意向考生失败', 500);
+    respondWithFriendlyError(res, err, '删除意向考生失败');
   }
 });
 
@@ -183,7 +180,7 @@ router.post('/:id/convert', async (req, res) => {
     const result = convertSchema.safeParse(req.body);
 
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -317,8 +314,7 @@ router.post('/:id/convert', async (req, res) => {
       },
     }, 201);
   } catch (err) {
-    console.error('Convert prospective candidate error:', err);
-    error(res, 'INTERNAL_ERROR', '转为正式考生失败', 500);
+    respondWithFriendlyError(res, err, '转为正式考生失败');
   }
 });
 

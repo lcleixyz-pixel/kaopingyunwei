@@ -30,6 +30,7 @@
 - 后端已使用 Pino 输出 JSON 日志，默认生产 `info` 级别，可通过 `LOG_LEVEL` 调整。
 - 请求日志记录方法、路径、状态码、耗时、用户、租户和来源 IP；不得写入明文密码、Token、Cookie、初始化密码 JSON 或证件敏感明文。
 - Pino 日志已对 `password`、`token`、`authorization`、`cookie`、`SEED_USER_PASSWORDS_JSON`、`SMOKE_USER_PASSWORDS_JSON` 等字段脱敏。
+- 路由层异常统一使用友好错误工具或结构化日志；禁止新增零散 `console.error`，也不要把 Zod 原始 `error.message` 直接返回给前端。
 - 日志文件和容器日志可能包含业务路径、用户 ID、租户 ID 和错误上下文，安全等级不低于审计日志；生产导出、截图和外发前必须脱敏。
 
 ## 数据与备份

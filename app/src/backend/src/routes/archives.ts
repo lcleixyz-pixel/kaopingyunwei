@@ -165,7 +165,7 @@ router.post('/batches', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async (req
   try {
     const result = reportBatchSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -220,7 +220,7 @@ router.patch('/batches/:id', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async
     const id = String(req.params.id);
     const result = reportBatchPatchSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -422,7 +422,7 @@ router.post('/batches/:id/review', requireRoles('SYS_ADMIN', 'HQ_ADMIN'), async 
   try {
     const result = reviewSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -490,7 +490,7 @@ router.post('/', requireRoles('SYS_ADMIN', 'HQ_ADMIN', 'BRANCH_ADMIN'), async (r
     const tenantId = req.tenantId!;
     const result = archiveSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -559,7 +559,7 @@ router.patch('/:id/status', requireRoles('SYS_ADMIN', 'HQ_ADMIN'), async (req, r
     const id = String(req.params.id);
     const result = statusSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 

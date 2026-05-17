@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { recordAudit } from '../utils/audit.js';
 import { canReadAcrossTenants } from '../services/accessScope.js';
 import { parseDateArray } from '../services/workdayCalendars.js';
@@ -43,8 +44,7 @@ router.get('/', requireRoles(...SETTINGS_READ_ROLES), async (_req, res) => {
     const rows = await prisma.config.findMany();
     success(res, buildSettings(rows));
   } catch (err) {
-    console.error('Get settings error:', err);
-    error(res, 'INTERNAL_ERROR', '获取设置失败', 500);
+    respondWithFriendlyError(res, err, '获取设置失败');
   }
 });
 
@@ -52,7 +52,7 @@ router.patch('/', requireRoles(...SETTINGS_WRITE_ROLES), async (req, res) => {
   try {
     const result = settingsSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -75,8 +75,7 @@ router.patch('/', requireRoles(...SETTINGS_WRITE_ROLES), async (req, res) => {
     const rows = await prisma.config.findMany();
     success(res, buildSettings(rows));
   } catch (err) {
-    console.error('Update settings error:', err);
-    error(res, 'INTERNAL_ERROR', '保存设置失败', 500);
+    respondWithFriendlyError(res, err, '保存设置失败');
   }
 });
 
@@ -103,8 +102,7 @@ router.get('/workday-calendars', async (req, res) => {
       updatedAt: row.updatedAt,
     })));
   } catch (err) {
-    console.error('Get workday calendars error:', err);
-    error(res, 'INTERNAL_ERROR', '获取工作日历失败', 500);
+    respondWithFriendlyError(res, err, '获取工作日历失败');
   }
 });
 
@@ -112,7 +110,7 @@ router.patch('/workday-calendars', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), as
   try {
     const result = workdayCalendarSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -169,8 +167,7 @@ router.patch('/workday-calendars', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), as
       updatedAt: calendar.updatedAt,
     });
   } catch (err) {
-    console.error('Update workday calendar error:', err);
-    error(res, 'INTERNAL_ERROR', '保存工作日历失败', 500);
+    respondWithFriendlyError(res, err, '保存工作日历失败');
   }
 });
 

@@ -8,6 +8,7 @@ import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { recordAudit } from '../utils/audit.js';
 import { error, success } from '../utils/response.js';
+import { logger } from '../utils/logger.js';
 import { applyPdfFont, PdfFontMissingError, requireCertificatePrintFont, requireChinesePdfFont } from '../utils/pdfFonts.js';
 import {
   DEFAULT_PDF_TEMPLATES,
@@ -266,7 +267,7 @@ function handleRouteError(res: Response, err: unknown, fallbackMessage: string):
     error(res, err.code, err.message, err.statusCode);
     return;
   }
-  console.error(fallbackMessage, err);
+  logger.error({ err }, fallbackMessage);
   error(res, 'INTERNAL_ERROR', fallbackMessage, 500);
 }
 

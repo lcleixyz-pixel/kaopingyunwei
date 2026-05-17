@@ -23,6 +23,7 @@ describe('friendly backend error normalization', () => {
     assert.equal(result.message, '请求参数错误，请检查填写内容');
     assert.equal(result.statusCode, 400);
     assert.match(result.details || '', /username/);
+    assert.doesNotMatch(result.details || '', /Too small|Invalid input|expected/i);
   });
 
   it('turns oversized Multer uploads into a 413 Chinese message', () => {

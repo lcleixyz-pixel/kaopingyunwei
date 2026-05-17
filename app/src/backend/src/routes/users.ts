@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { error, success } from '../utils/response.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { hashPassword } from '../utils/crypto.js';
 import { recordAudit } from '../utils/audit.js';
 import {
@@ -96,8 +97,7 @@ router.get('/options', async (req, res) => {
 
     success(res, { tenants, roles });
   } catch (err) {
-    console.error('Get user options error:', err);
-    error(res, 'INTERNAL_ERROR', '获取账号选项失败', 500);
+    respondWithFriendlyError(res, err, '获取账号选项失败');
   }
 });
 
@@ -105,7 +105,7 @@ router.get('/', async (req, res) => {
   try {
     const result = listUsersSchema.safeParse(req.query);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -141,8 +141,7 @@ router.get('/', async (req, res) => {
 
     success(res, users.map(sanitizeUser));
   } catch (err) {
-    console.error('List users error:', err);
-    error(res, 'INTERNAL_ERROR', '获取账号列表失败', 500);
+    respondWithFriendlyError(res, err, '获取账号列表失败');
   }
 });
 
@@ -150,7 +149,7 @@ router.post('/', async (req, res) => {
   try {
     const result = createUserSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -200,8 +199,7 @@ router.post('/', async (req, res) => {
 
     success(res, safeUser, 201);
   } catch (err) {
-    console.error('Create user error:', err);
-    error(res, 'INTERNAL_ERROR', '创建账号失败', 500);
+    respondWithFriendlyError(res, err, '创建账号失败');
   }
 });
 
@@ -209,7 +207,7 @@ router.patch('/:id', async (req, res) => {
   try {
     const result = updateUserSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -268,8 +266,7 @@ router.patch('/:id', async (req, res) => {
 
     success(res, safeUser);
   } catch (err) {
-    console.error('Update user error:', err);
-    error(res, 'INTERNAL_ERROR', '保存账号失败', 500);
+    respondWithFriendlyError(res, err, '保存账号失败');
   }
 });
 
@@ -277,7 +274,7 @@ router.post('/:id/reset-password', async (req, res) => {
   try {
     const result = resetPasswordSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -319,8 +316,7 @@ router.post('/:id/reset-password', async (req, res) => {
 
     success(res, sanitizeUser(user));
   } catch (err) {
-    console.error('Reset user password error:', err);
-    error(res, 'INTERNAL_ERROR', '重置密码失败', 500);
+    respondWithFriendlyError(res, err, '重置密码失败');
   }
 });
 

@@ -8,6 +8,7 @@ import type { NodeType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { addWorkDaysWithCalendar } from '../utils/dateUtils.js';
 import { recordAudit } from '../utils/audit.js';
 import {
@@ -117,8 +118,7 @@ router.get('/', async (req, res) => {
 
     success(res, plans.map(withRegistrationClosed));
   } catch (err) {
-    console.error('Get plans error:', err);
-    error(res, 'INTERNAL_ERROR', '获取计划列表失败', 500);
+    respondWithFriendlyError(res, err, '获取计划列表失败');
   }
 });
 
@@ -131,7 +131,7 @@ router.post('/', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (req, res) => 
     const result = createPlanSchema.safeParse(req.body);
     
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -191,8 +191,7 @@ router.post('/', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (req, res) => 
 
     success(res, plan, 201);
   } catch (err) {
-    console.error('Create plan error:', err);
-    error(res, 'INTERNAL_ERROR', '创建计划失败', 500);
+    respondWithFriendlyError(res, err, '创建计划失败');
   }
 });
 
@@ -228,8 +227,7 @@ router.get('/:id/local-upload-batches', async (req, res) => {
 
     success(res, batches);
   } catch (err) {
-    console.error('Get local upload batches error:', err);
-    error(res, 'INTERNAL_ERROR', '获取地方系统上传回填失败', 500);
+    respondWithFriendlyError(res, err, '获取地方系统上传回填失败');
   }
 });
 
@@ -243,7 +241,7 @@ router.post('/:id/local-upload-batches', requireRoles('BRANCH_ADMIN', 'BRANCH_ST
     const result = localUploadBatchSchema.safeParse(req.body);
 
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -354,8 +352,7 @@ router.post('/:id/local-upload-batches', requireRoles('BRANCH_ADMIN', 'BRANCH_ST
 
     success(res, writeResult.batch, 201);
   } catch (err) {
-    console.error('Create local upload batch error:', err);
-    error(res, 'INTERNAL_ERROR', '保存地方系统上传回填失败', 500);
+    respondWithFriendlyError(res, err, '保存地方系统上传回填失败');
   }
 });
 
@@ -389,8 +386,7 @@ router.get('/:id', async (req, res) => {
 
     success(res, withRegistrationClosed(plan));
   } catch (err) {
-    console.error('Get plan error:', err);
-    error(res, 'INTERNAL_ERROR', '获取计划详情失败', 500);
+    respondWithFriendlyError(res, err, '获取计划详情失败');
   }
 });
 
@@ -404,7 +400,7 @@ router.patch('/:id', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (req, res)
     const result = updatePlanSchema.safeParse(req.body);
 
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -487,8 +483,7 @@ router.patch('/:id', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (req, res)
 
     success(res, plan);
   } catch (err) {
-    console.error('Update plan error:', err);
-    error(res, 'INTERNAL_ERROR', '保存计划失败', 500);
+    respondWithFriendlyError(res, err, '保存计划失败');
   }
 });
 
@@ -567,8 +562,7 @@ router.patch('/:id/publish', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (r
 
     success(res, withRegistrationClosed(plan));
   } catch (err) {
-    console.error('Publish plan error:', err);
-    error(res, 'INTERNAL_ERROR', '发布计划失败', 500);
+    respondWithFriendlyError(res, err, '发布计划失败');
   }
 });
 
@@ -582,7 +576,7 @@ router.patch('/:id/rollback', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (
     const result = rollbackPlanSchema.safeParse(req.body || {});
 
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -706,8 +700,7 @@ router.patch('/:id/rollback', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (
       revertedCandidateCount: rollbackResult.revertedCandidateCount,
     });
   } catch (err) {
-    console.error('Rollback plan error:', err);
-    error(res, 'INTERNAL_ERROR', '回退计划失败', 500);
+    respondWithFriendlyError(res, err, '回退计划失败');
   }
 });
 
@@ -721,7 +714,7 @@ router.patch('/:id/cancel', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (re
     const result = cancelPlanSchema.safeParse(req.body);
 
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -776,8 +769,7 @@ router.patch('/:id/cancel', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (re
 
     success(res, plan);
   } catch (err) {
-    console.error('Cancel plan error:', err);
-    error(res, 'INTERNAL_ERROR', '取消计划失败', 500);
+    respondWithFriendlyError(res, err, '取消计划失败');
   }
 });
 

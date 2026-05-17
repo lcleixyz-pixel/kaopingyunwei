@@ -6,6 +6,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { authenticate } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { nestedPublishedPlanWhereForRead } from '../services/accessScope.js';
 import { shouldScopeRemindersToCurrentUser } from '../services/reminderVisibility.js';
 
@@ -44,8 +45,7 @@ router.get('/', async (req, res) => {
 
     success(res, reminders);
   } catch (err) {
-    console.error('Get reminders error:', err);
-    error(res, 'INTERNAL_ERROR', '获取提醒失败', 500);
+    respondWithFriendlyError(res, err, '获取提醒失败');
   }
 });
 
@@ -63,8 +63,7 @@ router.get('/count', async (req, res) => {
     const count = await prisma.reminder.count({ where });
     success(res, { count });
   } catch (err) {
-    console.error('Get reminder count error:', err);
-    error(res, 'INTERNAL_ERROR', '获取提醒数量失败', 500);
+    respondWithFriendlyError(res, err, '获取提醒数量失败');
   }
 });
 
@@ -99,8 +98,7 @@ router.patch('/:id/read', async (req, res) => {
 
     success(res, updatedReminder);
   } catch (err) {
-    console.error('Mark reminder read error:', err);
-    error(res, 'INTERNAL_ERROR', '处理提醒失败', 500);
+    respondWithFriendlyError(res, err, '处理提醒失败');
   }
 });
 

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { recordAudit } from '../utils/audit.js';
 import { canReadAcrossTenants } from '../services/accessScope.js';
 import { DEFAULT_CANDIDATE_TEMPLATE_MAPPINGS, parseTemplateMappings } from '../services/templateExport.js';
@@ -61,8 +62,7 @@ router.get('/', async (req, res) => {
       updatedAt: template.updatedAt,
     })));
   } catch (err) {
-    console.error('Get export templates error:', err);
-    error(res, 'INTERNAL_ERROR', '获取导出模板失败', 500);
+    respondWithFriendlyError(res, err, '获取导出模板失败');
   }
 });
 
@@ -70,7 +70,7 @@ router.post('/', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (req, res) => 
   try {
     const result = templateSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -124,8 +124,7 @@ router.post('/', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (req, res) => 
       mappings: data.mappings,
     }, 201);
   } catch (err) {
-    console.error('Create export template error:', err);
-    error(res, 'INTERNAL_ERROR', '保存导出模板失败', 500);
+    respondWithFriendlyError(res, err, '保存导出模板失败');
   }
 });
 
@@ -161,8 +160,7 @@ router.patch('/:id/default', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (r
 
     success(res, { message: '默认模板已更新' });
   } catch (err) {
-    console.error('Set default template error:', err);
-    error(res, 'INTERNAL_ERROR', '设置默认模板失败', 500);
+    respondWithFriendlyError(res, err, '设置默认模板失败');
   }
 });
 
@@ -193,8 +191,7 @@ router.delete('/:id', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'), async (req, res
 
     success(res, { message: '模板已删除' });
   } catch (err) {
-    console.error('Delete export template error:', err);
-    error(res, 'INTERNAL_ERROR', '删除模板失败', 500);
+    respondWithFriendlyError(res, err, '删除模板失败');
   }
 });
 

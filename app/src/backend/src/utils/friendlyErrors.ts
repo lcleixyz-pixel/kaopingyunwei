@@ -38,7 +38,7 @@ export function normalizeFriendlyError(err: unknown, fallbackMessage: string): F
       code: 'VALIDATION_ERROR',
       message: '请求参数错误，请检查填写内容',
       statusCode: 400,
-      details: err.issues.map((issue) => `${issue.path.join('.') || 'body'}: ${issue.message}`).join('; '),
+      details: err.issues.map((issue) => `${issue.path.join('.') || 'body'}: ${friendlyZodIssueMessage(issue.message)}`).join('; '),
     };
   }
 
@@ -92,4 +92,11 @@ function isFriendlyErrorShape(value: unknown): value is FriendlyError {
     candidate.statusCode < 600 &&
     (candidate.details === undefined || typeof candidate.details === 'string')
   );
+}
+
+function friendlyZodIssueMessage(message: string): string {
+  if (/[\u4e00-\u9fff]/.test(message)) {
+    return message;
+  }
+  return '请检查填写内容';
 }

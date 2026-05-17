@@ -257,8 +257,7 @@ router.get('/', async (req, res) => {
 
     success(res, certificates.map(sanitizeCertificate));
   } catch (err) {
-    console.error('Get certificates error:', err);
-    error(res, 'INTERNAL_ERROR', '获取证书列表失败', 500);
+    handleRouteError(res, err, '获取证书列表失败');
   }
 });
 
@@ -308,8 +307,7 @@ router.get('/plans', async (req, res) => {
       };
     }));
   } catch (err) {
-    console.error('Get certificate plans error:', err);
-    error(res, 'INTERNAL_ERROR', '获取证书计划工作台失败', 500);
+    handleRouteError(res, err, '获取证书计划工作台失败');
   }
 });
 
@@ -352,8 +350,7 @@ router.get('/records', async (req, res) => {
       certificate: candidate.certificate,
     })));
   } catch (err) {
-    console.error('Get certificate records error:', err);
-    error(res, 'INTERNAL_ERROR', '获取证书编号回填记录失败', 500);
+    handleRouteError(res, err, '获取证书编号回填记录失败');
   }
 });
 
@@ -361,7 +358,7 @@ router.post('/records', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'
   try {
     const result = certificateRecordSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -409,7 +406,7 @@ router.post('/records/import-commit', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 
   try {
     const result = importCommitSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -449,7 +446,7 @@ router.patch('/records/:id', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_S
     const id = String(req.params.id);
     const result = certificateRecordPatchSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -512,7 +509,7 @@ router.patch('/:id/status', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_ST
     const id = String(req.params.id);
     const result = z.object({ status: certStatusSchema }).safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -558,8 +555,7 @@ router.get('/supply-requests', async (req, res) => {
     });
     success(res, requests);
   } catch (err) {
-    console.error('Get certificate supply requests error:', err);
-    error(res, 'INTERNAL_ERROR', '获取证书申领单失败', 500);
+    handleRouteError(res, err, '获取证书申领单失败');
   }
 });
 
@@ -567,7 +563,7 @@ router.post('/supply-requests', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), ce
   try {
     const result = supplyRequestSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
     if (!req.file) {
@@ -735,8 +731,7 @@ router.get('/stock/balances', async (req, res) => {
 
     success(res, balances);
   } catch (err) {
-    console.error('Get certificate stock balances error:', err);
-    error(res, 'INTERNAL_ERROR', '获取证书库存失败', 500);
+    handleRouteError(res, err, '获取证书库存失败');
   }
 });
 
@@ -758,8 +753,7 @@ router.get('/stock/ledger', async (req, res) => {
 
     success(res, ledgers);
   } catch (err) {
-    console.error('Get certificate stock ledger error:', err);
-    error(res, 'INTERNAL_ERROR', '获取证书库存台账失败', 500);
+    handleRouteError(res, err, '获取证书库存台账失败');
   }
 });
 
@@ -787,7 +781,7 @@ router.post('/print-records', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), asyn
   try {
     const result = printRecordSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -892,8 +886,7 @@ router.get('/void-records', async (req, res) => {
     });
     success(res, records);
   } catch (err) {
-    console.error('Get certificate void records error:', err);
-    error(res, 'INTERNAL_ERROR', '获取作废记录失败', 500);
+    handleRouteError(res, err, '获取作废记录失败');
   }
 });
 
@@ -901,7 +894,7 @@ router.post('/void-records', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async
   try {
     const result = voidRecordSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -987,8 +980,7 @@ router.get('/destroy-batches', async (req, res) => {
     });
     success(res, batches);
   } catch (err) {
-    console.error('Get destroy batches error:', err);
-    error(res, 'INTERNAL_ERROR', '获取销毁批次失败', 500);
+    handleRouteError(res, err, '获取销毁批次失败');
   }
 });
 
@@ -996,7 +988,7 @@ router.post('/destroy-batches', requireRoles('SYS_ADMIN', 'HQ_ADMIN'), async (re
   try {
     const result = destroyBatchSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -1115,8 +1107,7 @@ router.get('/reissue-requests', async (req, res) => {
     });
     success(res, requests);
   } catch (err) {
-    console.error('Get reissue requests error:', err);
-    error(res, 'INTERNAL_ERROR', '获取补办申请失败', 500);
+    handleRouteError(res, err, '获取补办申请失败');
   }
 });
 
@@ -1124,7 +1115,7 @@ router.post('/reissue-requests', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), a
   try {
     const result = reissueRequestSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -1166,7 +1157,7 @@ router.post('/reissue-requests/:id/review', requireRoles('BRANCH_ADMIN', 'BRANCH
     const id = String(req.params.id);
     const result = reissueReviewSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -1209,7 +1200,7 @@ router.post('/reissue-requests/:id/issue', requireRoles('BRANCH_ADMIN', 'BRANCH_
     const id = String(req.params.id);
     const result = reissueIssueSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -1285,8 +1276,7 @@ router.get('/stocktakes', async (req, res) => {
     });
     success(res, records);
   } catch (err) {
-    console.error('Get certificate stocktakes error:', err);
-    error(res, 'INTERNAL_ERROR', '获取盘点记录失败', 500);
+    handleRouteError(res, err, '获取盘点记录失败');
   }
 });
 
@@ -1294,7 +1284,7 @@ router.post('/stocktakes', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async (
   try {
     const result = stocktakeSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -1348,7 +1338,7 @@ router.post('/attachments', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_ST
   try {
     const result = attachmentSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
     if (!req.file) {
@@ -1452,8 +1442,7 @@ router.get('/exports/supply-request/:id.pdf', async (req, res) => {
     const template = await getStandardPdfTemplate('CERT_SUPPLY_REQUEST');
     sendPdf(res, `证书申领单-${request.id}.pdf`, (doc) => renderSupplyRequestPdf(doc, request, template), pdfDocumentOptionsFromTemplate(template));
   } catch (err) {
-    console.error('Export supply request error:', err);
-    error(res, 'INTERNAL_ERROR', '导出证书申领单失败', 500);
+    handleRouteError(res, err, '导出证书申领单失败');
   }
 });
 
@@ -1483,8 +1472,7 @@ router.get('/exports/reissue-request/:id.doc', async (req, res) => {
 
     sendWordHtml(res, `补办申请-${request.id}.doc`, renderReissueRequestDoc(request));
   } catch (err) {
-    console.error('Export reissue request error:', err);
-    error(res, 'INTERNAL_ERROR', '导出补办申请失败', 500);
+    handleRouteError(res, err, '导出补办申请失败');
   }
 });
 
@@ -1521,8 +1509,7 @@ router.get('/exports/ledger.xlsx', async (req, res) => {
     res.setHeader('Content-Disposition', encodeContentDisposition('证书库存台账.xlsx'));
     res.send(buffer);
   } catch (err) {
-    console.error('Export stock ledger error:', err);
-    error(res, 'INTERNAL_ERROR', '导出证书库存台账失败', 500);
+    handleRouteError(res, err, '导出证书库存台账失败');
   }
 });
 
@@ -1780,7 +1767,7 @@ async function updateSupplyRequestAction(req: Request, res: Response, status: 'A
     const id = String(req.params.id);
     const result = supplyActionSchema.safeParse(req.body || {});
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { recordAudit } from '../utils/audit.js';
 import { decrypt } from '../utils/crypto.js';
 import { createWriteRateLimitMiddleware } from '../services/writeRateLimit.js';
@@ -114,8 +115,7 @@ router.get('/plans', async (req, res) => {
       scoreRecordNodeStatus: plan.nodes[0]?.status,
     })));
   } catch (err) {
-    console.error('Get score plans error:', err);
-    error(res, 'INTERNAL_ERROR', '获取成绩检录计划失败', 500);
+    respondWithFriendlyError(res, err, '获取成绩检录计划失败');
   }
 });
 
@@ -160,8 +160,7 @@ router.get('/', async (req, res) => {
 
     success(res, scores);
   } catch (err) {
-    console.error('Get scores error:', err);
-    error(res, 'INTERNAL_ERROR', '获取成绩列表失败', 500);
+    respondWithFriendlyError(res, err, '获取成绩列表失败');
   }
 });
 
@@ -169,7 +168,7 @@ router.post('/import/preview', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), sco
   try {
     const parsed = importSchema.safeParse(req.body);
     if (!parsed.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, parsed.error.message);
+      respondWithFriendlyError(res, parsed.error, '请求参数错误');
       return;
     }
 
@@ -182,8 +181,7 @@ router.post('/import/preview', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), sco
     const candidates = await getScoreParticipants(parsed.data.planId, req);
     success(res, buildImportPreview(parsed.data.rows, candidates));
   } catch (err) {
-    console.error('Preview score import error:', err);
-    error(res, 'INTERNAL_ERROR', '预览成绩导入失败', 500);
+    respondWithFriendlyError(res, err, '预览成绩导入失败');
   }
 });
 
@@ -191,7 +189,7 @@ router.post('/import/commit', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), scor
   try {
     const parsed = importSchema.safeParse(req.body);
     if (!parsed.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, parsed.error.message);
+      respondWithFriendlyError(res, parsed.error, '请求参数错误');
       return;
     }
 
@@ -242,8 +240,7 @@ router.post('/import/commit', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), scor
       preview,
     }, 201);
   } catch (err) {
-    console.error('Commit score import error:', err);
-    error(res, 'INTERNAL_ERROR', '确认导入成绩失败', 500);
+    respondWithFriendlyError(res, err, '确认导入成绩失败');
   }
 });
 
@@ -251,7 +248,7 @@ router.post('/batch', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), scoreBatchRa
   try {
     const parsed = batchScoreSchema.safeParse(req.body);
     if (!parsed.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, parsed.error.message);
+      respondWithFriendlyError(res, parsed.error, '请求参数错误');
       return;
     }
 
@@ -293,8 +290,7 @@ router.post('/batch', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), scoreBatchRa
 
     success(res, { writtenCount: result.length }, 201);
   } catch (err) {
-    console.error('Batch score upsert error:', err);
-    error(res, 'INTERNAL_ERROR', '保存成绩失败', 500);
+    respondWithFriendlyError(res, err, '保存成绩失败');
   }
 });
 
@@ -364,8 +360,7 @@ router.post('/plans/:planId/complete', requireRoles('BRANCH_ADMIN', 'BRANCH_STAF
 
     success(res, writeResult.completedNode);
   } catch (err) {
-    console.error('Complete score node error:', err);
-    error(res, 'INTERNAL_ERROR', '完成成绩检录失败', 500);
+    respondWithFriendlyError(res, err, '完成成绩检录失败');
   }
 });
 
@@ -400,8 +395,7 @@ router.patch('/:id/verify', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async 
 
     success(res, score);
   } catch (err) {
-    console.error('Verify score error:', err);
-    error(res, 'INTERNAL_ERROR', '复核成绩失败', 500);
+    respondWithFriendlyError(res, err, '复核成绩失败');
   }
 });
 

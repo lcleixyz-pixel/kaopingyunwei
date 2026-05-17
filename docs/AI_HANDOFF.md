@@ -31,6 +31,7 @@
 - 第一阶段已提交为 `9ac5f4a Harden seed passwords and friendly error handling`：移除固定初始化密码，seed/smoke 改用 `SEED_USER_PASSWORDS_JSON`/`SMOKE_USER_PASSWORDS_JSON`，后端和前端新增中文友好错误底座，证书/档案/证件照上传补充文件类型校验。
 - 第二阶段继续加固：生产环境 `CORS_ORIGIN` 不能为 `*`，必须配置明确前端域名；AI 运维恢复、下载、日志查询已增加 Zod 入参校验和中文友好错误。
 - 第三阶段继续加固：导入、上传和 AI 运维高风险写入口增加内存级限流，超限统一返回中文 `WRITE_RATE_LIMITED`；后端引入 Pino JSON 结构化日志，请求日志和后台任务日志已脱敏 `password`、`token`、`authorization`、`cookie` 等字段。
+- 第四阶段继续清理：路由层不再使用零散 `console.error`，统一走结构化日志或中文友好错误；路由层不再直接返回 Zod 原始 `error.message`，避免把英文底层校验细节暴露给用户。
 - 固定演示口令已从文档、seed、启动脚本和 smoke 脚本中清除；验收账号密码统一从受控环境变量或密码管理器获取。
 
 工程基线：
@@ -139,6 +140,19 @@ Phase 1.3 节点追踪与报名阶段关闭：
 - 审核通过的考生资料再次保存前，前端会提示使用者确认本地上级部门业务系统信息已同步保持一致。
 
 ## 最近验证结果
+
+2026-05-17 第四阶段安全优化验证：
+
+- 路由层 `console.error` 已清理，异常记录统一走 Pino 结构化日志或中文友好错误兜底。
+- 路由层不再直接返回 Zod 原始 `result.error.message` / `parsed.error.message`，避免用户看到英文底层校验细节。
+- 新增 `app/src/backend/src/utils/routeErrorGuard.test.ts`，用于防止路由层重新出现零散 `console.error` 或原始 Zod 错误直出。
+- `node --import tsx --test src/backend/src/utils/routeErrorGuard.test.ts src/backend/src/utils/friendlyErrors.test.ts`：通过，6 个测试。
+- `npm run backend:test`：通过，41 个 suite、155 个测试。
+- `npm run lint`：通过。
+- `npm run check`：通过；前端 Vite 构建和后端 TypeScript 编译均通过。Vite 仍提示单个 JS chunk 超过 500 kB，属于性能优化项。
+- `npx prisma migrate status --schema src/backend/prisma/schema.prisma`：通过，11 个 migrations，schema 与数据库一致。
+- `git diff --check`：通过。
+- 固定演示口令扫描无命中；`password123` 仅保留在弱密码黑名单中，用于阻止此类口令进入生产初始化配置。
 
 2026-05-17 第三阶段安全优化验证：
 
