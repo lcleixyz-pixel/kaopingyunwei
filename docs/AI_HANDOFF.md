@@ -33,6 +33,7 @@
 - 第三阶段继续加固：导入、上传和 AI 运维高风险写入口增加内存级限流，超限统一返回中文 `WRITE_RATE_LIMITED`；后端引入 Pino JSON 结构化日志，请求日志和后台任务日志已脱敏 `password`、`token`、`authorization`、`cookie` 等字段。
 - 第四阶段继续清理：路由层不再使用零散 `console.error`，统一走结构化日志或中文友好错误；路由层不再直接返回 Zod 原始 `error.message`，避免把英文底层校验细节暴露给用户。
 - 第五阶段开始加固：核心列表接口增加分页参数解析和无分页安全上限；候选人审核状态、证书节点完成备注改为先过 Zod 校验，再进入业务逻辑。
+- 第六阶段开始加固：新增路由输入校验工具 `parseBody`/`parseQuery`；证书编号导入预览和 PDF 模板保存已改为先过 Zod 校验，再进入解析或保存逻辑。
 - 固定演示口令已从文档、seed、启动脚本和 smoke 脚本中清除；验收账号密码统一从受控环境变量或密码管理器获取。
 
 工程基线：
@@ -141,6 +142,20 @@ Phase 1.3 节点追踪与报名阶段关闭：
 - 审核通过的考生资料再次保存前，前端会提示使用者确认本地上级部门业务系统信息已同步保持一致。
 
 ## 最近验证结果
+
+2026-05-17 第六阶段安全优化验证：
+
+- 新增 `app/src/backend/src/utils/routeValidation.ts` 和测试，封装 `parseBody`/`parseQuery`，Zod 校验失败时抛出中文友好 `VALIDATION_ERROR`。
+- `/api/certificates/records/import-preview` 的 `planId` 已改为 schema 校验，避免直接读取 `req.body.planId`。
+- `/api/pdf-templates/:key` 的 `name` 和 `definition` 已改为 schema 校验，避免直接读取 `req.body?.name` / `req.body?.definition`。
+- 路由护栏测试扩展：禁止上述高风险原始字段访问模式回退。
+- `node --import tsx --test src/backend/src/utils/routeValidation.test.ts src/backend/src/utils/routeErrorGuard.test.ts`：通过，6 个测试。
+- `npm run backend:test`：通过，43 个 suite、162 个测试。
+- `npm run lint`：通过。
+- `npm run check`：通过；前端 Vite 构建和后端 TypeScript 编译均通过。Vite 仍提示单个 JS chunk 超过 500 kB，属于性能优化项。
+- `npx prisma migrate status --schema src/backend/prisma/schema.prisma`：通过，11 个 migrations，schema 与数据库一致。
+- `git diff --check`：通过。
+- 固定演示口令扫描无命中。
 
 2026-05-17 第五阶段安全优化验证：
 

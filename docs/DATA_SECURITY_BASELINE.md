@@ -38,6 +38,7 @@
 - 核心列表接口应优先支持 `page`/`pageSize`，并限制最大 `pageSize`；前端没有分页 UI 的接口必须保留无分页安全上限，避免一次性读取过多数据。
 - 无分页列表超过安全上限时，应返回中文 `LIST_TOO_LARGE`，提示用户输入筛选条件或分页查看，不要静默截断数据。
 - 写接口中的状态、备注、数量、ID 等关键输入必须先经过 Zod schema，再进入业务逻辑；不要直接读取 `req.body.status`、`req.body.notes` 等高风险字段。
+- 新增路由建议优先使用 `parseBody` / `parseQuery` 封装 Zod 校验，保持中文 `VALIDATION_ERROR` 格式一致。
 
 ## 数据与备份
 

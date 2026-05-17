@@ -26,6 +26,9 @@ describe('route error handling guardrails', () => {
     const forbiddenPatterns = [
       /const\s+\{\s*status\s*\}\s*=\s*req\.body/,
       /normalizeText\(req\.body\?\.notes\)/,
+      /normalizeText\(req\.body\.planId\)/,
+      /req\.body\?\.definition/,
+      /req\.body\?\.name/,
     ];
     const offenders = routeFiles()
       .filter((file) => {

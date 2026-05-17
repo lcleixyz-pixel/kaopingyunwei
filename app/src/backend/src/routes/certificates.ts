@@ -27,6 +27,7 @@ import { addWorkDaysWithCalendar } from '../utils/dateUtils.js';
 import { applyPdfFont, requireCertificatePrintFont, requireChinesePdfFont } from '../utils/pdfFonts.js';
 import { createUploadFileFilter, uploadProfiles } from '../utils/uploadValidation.js';
 import { enforceUnpagedListLimit, paginationMeta, parseListPagination } from '../utils/listSafety.js';
+import { parseBody } from '../utils/routeValidation.js';
 import { createWriteRateLimitMiddleware } from '../services/writeRateLimit.js';
 import { getWorkdayCalendarConfig } from '../services/workdayCalendars.js';
 import { publishedPlanWhereForRead, tenantWhereForRead } from '../services/accessScope.js';
@@ -127,6 +128,10 @@ const certificateRecordPatchSchema = z.object({
   printBatchNo: z.string().trim().max(100).optional(),
   verificationItems: z.record(z.string(), z.boolean()).optional(),
   issueNotes: z.string().trim().max(1000).optional(),
+});
+
+const importPreviewSchema = z.object({
+  planId: z.string().uuid('计划ID格式不正确'),
 });
 
 const importCommitSchema = z.object({
@@ -397,18 +402,14 @@ router.post('/records', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'
 
 router.post('/records/import-preview', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), certificateImportRateLimit, importUpload.single('file'), async (req, res) => {
   try {
-    const planId = normalizeText(req.body.planId);
-    if (!planId) {
-      error(res, 'VALIDATION_ERROR', '缺少计划ID', 400);
-      return;
-    }
+    const body = parseBody(importPreviewSchema, req.body);
     if (!req.file) {
       error(res, 'VALIDATION_ERROR', '缺少证书编号导入文件', 400);
       return;
     }
 
     const rows = parseCertificateImportRows(req.file.buffer);
-    const preview = await buildImportPreviewForPlan(req, planId, rows);
+    const preview = await buildImportPreviewForPlan(req, body.planId, rows);
     success(res, preview);
   } catch (err) {
     handleRouteError(res, err, '解析证书编号导入文件失败');
