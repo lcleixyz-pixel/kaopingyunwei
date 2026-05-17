@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, Plus, Search, Filter, Loader2, Pencil, Send, RotateCcw, XCircle } from 'lucide-react';
+import { PaginationBar } from '@/components/common/PaginationBar';
 import { useApi } from '@/hooks/useApi';
 import { getWorkTypesForOccupation, LEVEL_OPTIONS, normalizeLevelLabel, OCCUPATION_OPTIONS, type ExamPlan } from '@/shared';
 import { PLAN_STATUS_LABELS } from '@/lib/constants';
 import { formatDate } from '@/lib/dateUtils';
+import { DEFAULT_PAGE_SIZE, SUMMARY_PAGE_SIZE, clampPageAfterMeta, withPaginationParams, type PaginationMeta, type PaginationState } from '@/lib/apiPagination';
 import { getPlanStageSummary } from '@/lib/workbenchRules';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -45,10 +47,12 @@ const emptyForm: CreatePlanForm = {
 };
 
 export default function ExamPlans() {
-  const { get, post, patch } = useApi();
+  const { get, getWithMeta, post, patch } = useApi();
   const { user } = useAuthStore();
   const [plans, setPlans] = useState<ExamPlan[]>([]);
   const [allPlans, setAllPlans] = useState<ExamPlan[]>([]);
+  const [pagination, setPagination] = useState<PaginationState>({ page: 1, pageSize: DEFAULT_PAGE_SIZE });
+  const [paginationMeta, setPaginationMeta] = useState<PaginationMeta>();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,18 +66,24 @@ export default function ExamPlans() {
     setIsLoading(true);
     setError('');
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, unknown> = {};
       if (statusFilter !== 'ALL') params.status = statusFilter;
       if (searchQuery) params.search = searchQuery;
-      const data = await get<ExamPlan[]>('/exam-plans', params);
+      const { data, meta } = await getWithMeta<ExamPlan[]>('/exam-plans', withPaginationParams(params, pagination));
+      const nextPaginationMeta = meta?.pagination;
       setPlans(data);
-      setAllPlans(await get<ExamPlan[]>('/exam-plans'));
+      setPaginationMeta(nextPaginationMeta);
+      const safePage = clampPageAfterMeta(pagination.page, nextPaginationMeta);
+      if (safePage !== pagination.page) {
+        setPagination((current) => ({ ...current, page: safePage }));
+      }
+      setAllPlans(await get<ExamPlan[]>('/exam-plans', { page: 1, pageSize: SUMMARY_PAGE_SIZE }));
     } catch (err: any) {
       setError(err?.message || '获取计划列表失败');
     } finally {
       setIsLoading(false);
     }
-  }, [get, statusFilter, searchQuery]);
+  }, [get, getWithMeta, pagination, statusFilter, searchQuery]);
 
   useEffect(() => {
     fetchPlans();
@@ -137,6 +147,24 @@ export default function ExamPlans() {
   };
 
   const canManagePlans = user?.role === 'SYS_ADMIN' || user?.role === 'BRANCH_ADMIN';
+
+  const resetToFirstPage = () => {
+    setPagination((current) => current.page === 1 ? current : { ...current, page: 1 });
+  };
+
+  const handleSearchQueryChange = (value: string) => {
+    setSearchQuery(value);
+    resetToFirstPage();
+  };
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value);
+    resetToFirstPage();
+  };
+
+  const handlePageChange = (page: number) => {
+    setPagination((current) => ({ ...current, page }));
+  };
 
   const handlePublish = async (plan: ExamPlan) => {
     const ok = window.confirm(`确认发布「${plan.title}」？发布后会生成考评节点并开放报名资料整理；如需回退，正式考生会转回意向考生。`);
@@ -225,7 +253,7 @@ export default function ExamPlans() {
             type="text"
             placeholder="搜索计划名称、职业、工种..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchQueryChange(e.target.value)}
             className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
           />
         </div>
@@ -234,7 +262,7 @@ export default function ExamPlans() {
           {['PUBLISHED', 'DRAFT', 'ALL', 'CANCELLED'].map((s) => (
             <button
               key={s}
-              onClick={() => setStatusFilter(s)}
+              onClick={() => handleStatusFilterChange(s)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 statusFilter === s ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
@@ -342,6 +370,13 @@ export default function ExamPlans() {
             <p>暂无考评计划</p>
           </div>
         )}
+        <PaginationBar
+          pagination={pagination}
+          meta={paginationMeta}
+          visibleCount={displayedPlans.length}
+          isLoading={isLoading}
+          onPageChange={handlePageChange}
+        />
       </div>
 
       {/* Create/Edit Plan Dialog */}

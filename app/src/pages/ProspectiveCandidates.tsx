@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, Pencil, Plus, Search, Trash2, UserPlus, XCircle } from 'lucide-react';
+import { PaginationBar } from '@/components/common/PaginationBar';
 import { useApi } from '@/hooks/useApi';
 import { EDUCATION_OPTIONS, getWorkTypesForOccupation, LEVEL_OPTIONS, normalizeLevelLabel, OCCUPATION_OPTIONS, type ConvertProspectiveCandidateResponse, type ExamPlan, type ProspectiveCandidate, type ProspectiveCandidateStatus } from '@/shared';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/dateUtils';
+import { DEFAULT_PAGE_SIZE, SUMMARY_PAGE_SIZE, clampPageAfterMeta, withPaginationParams, type PaginationMeta, type PaginationState } from '@/lib/apiPagination';
 import { getProspectSummarySource, summarizeProspects } from '@/lib/workbenchRules';
 
 interface ProspectForm {
@@ -61,11 +63,13 @@ const emptyConvertForm: ConvertForm = {
 };
 
 export default function ProspectiveCandidates() {
-  const { get, post, patch, del } = useApi();
+  const { get, getWithMeta, post, patch, del } = useApi();
   const { user } = useAuthStore();
   const [candidates, setCandidates] = useState<ProspectiveCandidate[]>([]);
   const [allCandidates, setAllCandidates] = useState<ProspectiveCandidate[]>([]);
   const [plans, setPlans] = useState<ExamPlan[]>([]);
+  const [pagination, setPagination] = useState<PaginationState>({ page: 1, pageSize: DEFAULT_PAGE_SIZE });
+  const [paginationMeta, setPaginationMeta] = useState<PaginationMeta>();
   const [isLoading, setIsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -93,25 +97,31 @@ export default function ProspectiveCandidates() {
     setIsLoading(true);
     setError('');
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, unknown> = {};
       if (searchQuery) params.search = searchQuery;
       if (statusFilter !== 'ALL') params.status = statusFilter;
-      const [visibleCandidates, summaryCandidates] = await Promise.all([
-        get<ProspectiveCandidate[]>('/prospective-candidates', params),
-        get<ProspectiveCandidate[]>('/prospective-candidates'),
+      const [visibleResult, summaryCandidates] = await Promise.all([
+        getWithMeta<ProspectiveCandidate[]>('/prospective-candidates', withPaginationParams(params, pagination)),
+        get<ProspectiveCandidate[]>('/prospective-candidates', { page: 1, pageSize: SUMMARY_PAGE_SIZE }),
       ]);
-      setCandidates(visibleCandidates);
+      const nextPaginationMeta = visibleResult.meta?.pagination;
+      setCandidates(visibleResult.data);
       setAllCandidates(summaryCandidates);
+      setPaginationMeta(nextPaginationMeta);
+      const safePage = clampPageAfterMeta(pagination.page, nextPaginationMeta);
+      if (safePage !== pagination.page) {
+        setPagination((current) => ({ ...current, page: safePage }));
+      }
     } catch (err) {
       setError(getErrorMessage(err, '获取意向考生失败'));
     } finally {
       setIsLoading(false);
     }
-  }, [get, searchQuery, statusFilter]);
+  }, [get, getWithMeta, pagination, searchQuery, statusFilter]);
 
   const fetchPlans = useCallback(async () => {
     try {
-      setPlans(await get<ExamPlan[]>('/exam-plans'));
+      setPlans(await get<ExamPlan[]>('/exam-plans', { page: 1, pageSize: SUMMARY_PAGE_SIZE }));
     } catch {
       setPlans([]);
     }
@@ -232,6 +242,23 @@ export default function ProspectiveCandidates() {
   };
 
   const inputClass = 'w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm';
+  const resetToFirstPage = () => {
+    setPagination((current) => current.page === 1 ? current : { ...current, page: 1 });
+  };
+
+  const handleSearchQueryChange = (value: string) => {
+    setSearchQuery(value);
+    resetToFirstPage();
+  };
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value);
+    resetToFirstPage();
+  };
+
+  const handlePageChange = (page: number) => {
+    setPagination((current) => ({ ...current, page }));
+  };
 
   return (
     <div className="space-y-6">
@@ -275,14 +302,14 @@ export default function ProspectiveCandidates() {
             type="text"
             placeholder="搜索姓名或手机号..."
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(event) => handleSearchQueryChange(event.target.value)}
             className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none"
           />
         </div>
         {['FOLLOWING', 'ALL', 'CONVERTED', 'NOT_INTERESTED'].map((status) => (
           <button
             key={status}
-            onClick={() => setStatusFilter(status)}
+            onClick={() => handleStatusFilterChange(status)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               statusFilter === status ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
@@ -364,6 +391,13 @@ export default function ProspectiveCandidates() {
             <p>暂无意向考生</p>
           </div>
         )}
+        <PaginationBar
+          pagination={pagination}
+          meta={paginationMeta}
+          visibleCount={candidates.length}
+          isLoading={isLoading}
+          onPageChange={handlePageChange}
+        />
       </div>
 
       {showEditor && (

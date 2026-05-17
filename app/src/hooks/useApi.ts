@@ -18,6 +18,11 @@ const apiClient = axios.create({
   },
 });
 
+export interface ApiResult<T> {
+  data: T;
+  meta?: ApiResponse<T>['meta'];
+}
+
 // 请求拦截器：自动添加token
 apiClient.interceptors.request.use(
   (config) => {
@@ -52,6 +57,17 @@ export function useApi() {
     return response.data.data as T;
   }, []);
 
+  const getWithMeta = useCallback(async <T>(url: string, params?: Record<string, unknown>): Promise<ApiResult<T>> => {
+    const response = await apiClient.get<ApiResponse<T>>(url, { params });
+    if (!response.data.success) {
+      throw normalizeApiError({ response: { status: response.status, data: response.data } });
+    }
+    return {
+      data: response.data.data as T,
+      meta: response.data.meta,
+    };
+  }, []);
+
   const post = useCallback(async <T>(url: string, data?: unknown): Promise<T> => {
     const response = await apiClient.post<ApiResponse<T>>(url, data);
     if (!response.data.success) {
@@ -84,7 +100,7 @@ export function useApi() {
     return response.data.data as T;
   }, []);
 
-  return { get, post, patch, put, del };
+  return { get, getWithMeta, post, patch, put, del };
 }
 
 export { apiClient };

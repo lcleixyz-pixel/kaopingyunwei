@@ -26,6 +26,13 @@
 
 ## 最近完成内容
 
+2026-05-18 分页优化进展：
+
+- 前端 `useApi` 新增 `getWithMeta`，在保持既有 `get` 调用兼容的同时，可以读取后端 `meta.pagination`。
+- 新增分页工具 `app/src/lib/apiPagination.ts` 和通用分页条 `app/src/components/common/PaginationBar.tsx`，分页提示、按钮文案均为中文友好展示。
+- 考评计划、报名资料工作台、意向考生、系统设置中的账号管理已接入后端分页参数；搜索、筛选或切换计划时会自动回到第 1 页，避免请求不存在的旧页。
+- 计划下拉和汇总辅助读取已显式带 `page/pageSize`，避免触发无分页大列表安全上限。
+
 2026-05-17 安全优化进展：
 
 - 第一阶段已提交为 `9ac5f4a Harden seed passwords and friendly error handling`：移除固定初始化密码，seed/smoke 改用 `SEED_USER_PASSWORDS_JSON`/`SMOKE_USER_PASSWORDS_JSON`，后端和前端新增中文友好错误底座，证书/档案/证件照上传补充文件类型校验。
@@ -142,6 +149,15 @@ Phase 1.3 节点追踪与报名阶段关闭：
 - 审核通过的考生资料再次保存前，前端会提示使用者确认本地上级部门业务系统信息已同步保持一致。
 
 ## 最近验证结果
+
+2026-05-18 分页优化验证：
+
+- `node --import tsx --test tests/apiPagination.test.ts tests/apiError.test.ts`：通过，2 个 suite、7 个测试。
+- `npm run backend:test`：通过，43 个 suite、162 个测试。
+- `npm run lint`：通过。
+- `npm run check`：通过；前端 Vite 构建和后端 TypeScript 编译均通过。Vite 仍提示单个 JS chunk 超过 500 kB，属于性能优化项。
+- `npx prisma migrate status --schema src/backend/prisma/schema.prisma`：通过，11 个 migrations，schema 与数据库一致。
+- `git diff --check`：通过。
 
 2026-05-17 第六阶段安全优化验证：
 

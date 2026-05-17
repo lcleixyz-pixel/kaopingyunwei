@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, CreditCard, Download, FileCheck2, Image as ImageIcon, Loader2, Pencil, Plus, Search, Trash2, Upload, Users, XCircle } from 'lucide-react';
 import { apiClient, useApi } from '@/hooks/useApi';
+import { PaginationBar } from '@/components/common/PaginationBar';
 import {
   ALL_MATERIALS,
   DEFAULT_MATERIALS,
@@ -20,6 +21,7 @@ import {
   type PaymentStatus,
 } from '@/shared';
 import { formatDate } from '@/lib/dateUtils';
+import { DEFAULT_PAGE_SIZE, SUMMARY_PAGE_SIZE, clampPageAfterMeta, withPaginationParams, type PaginationMeta, type PaginationState } from '@/lib/apiPagination';
 import { getCandidateManagementPlanOptions, shouldLoadCandidatesForPlan } from '@/lib/candidateManagementRules';
 import { summarizeCandidateRegistration } from '@/lib/workbenchRules';
 import { useAuthStore } from '@/stores/authStore';
@@ -101,11 +103,13 @@ const emptyForm: ProfileForm = {
 };
 
 export default function Candidates() {
-  const { get, post } = useApi();
+  const { get, getWithMeta, post } = useApi();
   const { user } = useAuthStore();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [plans, setPlans] = useState<ExamPlan[]>([]);
   const [uploadBatches, setUploadBatches] = useState<LocalUploadBatch[]>([]);
+  const [pagination, setPagination] = useState<PaginationState>({ page: 1, pageSize: DEFAULT_PAGE_SIZE });
+  const [paginationMeta, setPaginationMeta] = useState<PaginationMeta>();
   const [isLoading, setIsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -159,6 +163,7 @@ export default function Candidates() {
   const fetchCandidates = useCallback(async () => {
     if (!shouldLoadCandidatesForPlan(selectedPlanId)) {
       setCandidates([]);
+      setPaginationMeta(undefined);
       setIsLoading(false);
       return;
     }
@@ -166,21 +171,27 @@ export default function Candidates() {
     setIsLoading(true);
     setError('');
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, unknown> = {};
       if (searchQuery) params.search = searchQuery;
       params.planId = selectedPlanId;
-      const data = await get<Candidate[]>('/candidates', params);
+      const { data, meta } = await getWithMeta<Candidate[]>('/candidates', withPaginationParams(params, pagination));
+      const nextPaginationMeta = meta?.pagination;
       setCandidates(data);
+      setPaginationMeta(nextPaginationMeta);
+      const safePage = clampPageAfterMeta(pagination.page, nextPaginationMeta);
+      if (safePage !== pagination.page) {
+        setPagination((current) => ({ ...current, page: safePage }));
+      }
     } catch (err) {
       setError(getErrorMessage(err, '获取考生列表失败'));
     } finally {
       setIsLoading(false);
     }
-  }, [get, searchQuery, selectedPlanId]);
+  }, [getWithMeta, pagination, searchQuery, selectedPlanId]);
 
   const fetchPlans = useCallback(async () => {
     try {
-      setPlans(await get<ExamPlan[]>('/exam-plans', { status: 'PUBLISHED' }));
+      setPlans(await get<ExamPlan[]>('/exam-plans', { status: 'PUBLISHED', page: 1, pageSize: SUMMARY_PAGE_SIZE }));
     } catch {
       setPlans([]);
     }
@@ -453,6 +464,23 @@ export default function Candidates() {
   const inputClass = 'w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm';
   const fieldGroups = chunk(templateHeaders.filter((header) => header !== '序号'), 3);
   const latestUpload = uploadBatches[0];
+  const resetToFirstPage = () => {
+    setPagination((current) => current.page === 1 ? current : { ...current, page: 1 });
+  };
+
+  const handleSearchQueryChange = (value: string) => {
+    setSearchQuery(value);
+    resetToFirstPage();
+  };
+
+  const handleSelectedPlanChange = (planId: string) => {
+    setSelectedPlanId(planId);
+    resetToFirstPage();
+  };
+
+  const handlePageChange = (page: number) => {
+    setPagination((current) => ({ ...current, page }));
+  };
 
   return (
     <div className="space-y-6">
@@ -506,7 +534,7 @@ export default function Candidates() {
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <select
               value={selectedPlanId}
-              onChange={(event) => setSelectedPlanId(event.target.value)}
+              onChange={(event) => handleSelectedPlanChange(event.target.value)}
               className="w-full min-w-0 rounded-lg border border-slate-300 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 sm:w-auto sm:min-w-72"
             >
               <option value="">请选择已发布考评计划</option>
@@ -522,7 +550,7 @@ export default function Candidates() {
                 type="text"
                 placeholder="搜索姓名..."
                 value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                onChange={(event) => handleSearchQueryChange(event.target.value)}
                 className="w-full rounded-lg border border-slate-300 py-2 pl-10 pr-4 outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -649,6 +677,13 @@ export default function Candidates() {
             <p>{emptyStateText}</p>
           </div>
         )}
+        <PaginationBar
+          pagination={pagination}
+          meta={paginationMeta}
+          visibleCount={candidates.length}
+          isLoading={isLoading}
+          onPageChange={handlePageChange}
+        />
       </div>
 
       {showProfile && (

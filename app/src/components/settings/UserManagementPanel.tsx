@@ -1,8 +1,10 @@
 import { KeyRound, Loader2, Pencil, Plus, Search } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PaginationBar } from '@/components/common/PaginationBar';
 import { useApi } from '@/hooks/useApi';
 import { ROLE_LABELS } from '@/lib/constants';
+import { DEFAULT_PAGE_SIZE, clampPageAfterMeta, withPaginationParams, type PaginationMeta, type PaginationState } from '@/lib/apiPagination';
 import type { CreateUserInput, Tenant, UpdateUserInput, User, UserManagementOptions, UserRole, UserStatus } from '@/shared';
 
 const STATUS_LABELS: Record<UserStatus, string> = {
@@ -43,10 +45,12 @@ interface Filters {
 const initialFilters: Filters = { keyword: '', tenantId: '', role: '', status: '' };
 
 export function UserManagementPanel() {
-  const { get, post, patch } = useApi();
+  const { get, getWithMeta, post, patch } = useApi();
   const [users, setUsers] = useState<User[]>([]);
   const [options, setOptions] = useState<UserManagementOptions>({ tenants: [], roles: [] });
   const [filters, setFilters] = useState<Filters>(initialFilters);
+  const [pagination, setPagination] = useState<PaginationState>({ page: 1, pageSize: DEFAULT_PAGE_SIZE });
+  const [paginationMeta, setPaginationMeta] = useState<PaginationMeta>();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -56,13 +60,19 @@ export function UserManagementPanel() {
   const [form, setForm] = useState<AccountForm>(initialForm);
   const [resetPassword, setResetPassword] = useState('');
 
-  const loadUsers = useCallback(async (nextFilters: Filters) => {
+  const loadUsers = useCallback(async (nextFilters: Filters, nextPagination: PaginationState) => {
     const params = Object.fromEntries(
       Object.entries(nextFilters).filter(([, value]) => value.trim() !== '')
     );
-    const data = await get<User[]>('/users', params);
+    const { data, meta } = await getWithMeta<User[]>('/users', withPaginationParams(params, nextPagination));
+    const nextPaginationMeta = meta?.pagination;
     setUsers(data);
-  }, [get]);
+    setPaginationMeta(nextPaginationMeta);
+    const safePage = clampPageAfterMeta(nextPagination.page, nextPaginationMeta);
+    if (safePage !== nextPagination.page) {
+      setPagination((current) => ({ ...current, page: safePage }));
+    }
+  }, [getWithMeta]);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +89,7 @@ export function UserManagementPanel() {
           role: defaultRole,
           tenantId: defaultTenant?.id || '',
         }));
-        await loadUsers(initialFilters);
+        await loadUsers(initialFilters, { page: 1, pageSize: DEFAULT_PAGE_SIZE });
       } catch (err: any) {
         if (!cancelled) setMessage(err?.message || '加载账号失败');
       } finally {
@@ -100,10 +110,21 @@ export function UserManagementPanel() {
 
   const setFilter = (key: keyof Filters, value: string) => {
     const nextFilters = { ...filters, [key]: value };
+    const nextPagination = { ...pagination, page: 1 };
     setFilters(nextFilters);
+    setPagination(nextPagination);
     setIsLoading(true);
-    loadUsers(nextFilters)
+    loadUsers(nextFilters, nextPagination)
       .catch((err: any) => setMessage(err?.message || '筛选账号失败'))
+      .finally(() => setIsLoading(false));
+  };
+
+  const handlePageChange = (page: number) => {
+    const nextPagination = { ...pagination, page };
+    setPagination(nextPagination);
+    setIsLoading(true);
+    loadUsers(filters, nextPagination)
+      .catch((err: any) => setMessage(err?.message || '加载账号失败'))
       .finally(() => setIsLoading(false));
   };
 
@@ -180,7 +201,7 @@ export function UserManagementPanel() {
         await post<User>('/users', payload);
         setMessage('账号已创建');
       }
-      await loadUsers(filters);
+      await loadUsers(filters, pagination);
       closeForm();
     } catch (err: any) {
       setMessage(err?.message || '保存账号失败');
@@ -204,7 +225,7 @@ export function UserManagementPanel() {
       setMessage('密码已重置');
       setResetUser(null);
       setResetPassword('');
-      await loadUsers(filters);
+      await loadUsers(filters, pagination);
     } catch (err: any) {
       setMessage(err?.message || '重置密码失败');
     } finally {
@@ -219,7 +240,7 @@ export function UserManagementPanel() {
     try {
       await patch<User>(`/users/${user.id}`, { status: nextStatus });
       setMessage(nextStatus === 'ACTIVE' ? '账号已启用' : '账号已停用');
-      await loadUsers(filters);
+      await loadUsers(filters, pagination);
     } catch (err: any) {
       setMessage(err?.message || '状态更新失败');
     } finally {
@@ -340,6 +361,13 @@ export function UserManagementPanel() {
             ))}
           </tbody>
         </table>
+        <PaginationBar
+          pagination={pagination}
+          meta={paginationMeta}
+          visibleCount={users.length}
+          isLoading={isLoading}
+          onPageChange={handlePageChange}
+        />
       </div>
 
       {isFormOpen && (
