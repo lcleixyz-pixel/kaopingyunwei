@@ -26,6 +26,12 @@
 
 ## 最近完成内容
 
+2026-05-17 安全优化进展：
+
+- 第一阶段已提交为 `9ac5f4a Harden seed passwords and friendly error handling`：移除固定初始化密码，seed/smoke 改用 `SEED_USER_PASSWORDS_JSON`/`SMOKE_USER_PASSWORDS_JSON`，后端和前端新增中文友好错误底座，证书/档案/证件照上传补充文件类型校验。
+- 第二阶段继续加固：生产环境 `CORS_ORIGIN` 不能为 `*`，必须配置明确前端域名；AI 运维恢复、下载、日志查询已增加 Zod 入参校验和中文友好错误。
+- 固定演示口令已从文档、seed、启动脚本和 smoke 脚本中清除；验收账号密码统一从受控环境变量或密码管理器获取。
+
 工程基线：
 
 - 前端构建已通过。
