@@ -2,6 +2,7 @@ import type { Response } from 'express';
 import multer from 'multer';
 import { ZodError } from 'zod';
 import { error } from './response.js';
+import { logger } from './logger.js';
 
 export class AppError extends Error {
   constructor(
@@ -75,7 +76,7 @@ export function normalizeFriendlyError(err: unknown, fallbackMessage: string): F
 export function respondWithFriendlyError(res: Response, err: unknown, fallbackMessage: string): void {
   const friendly = normalizeFriendlyError(err, fallbackMessage);
   if (friendly.statusCode >= 500) {
-    console.error(fallbackMessage, err);
+    logger.error({ err }, fallbackMessage);
   }
   error(res, friendly.code, friendly.message, friendly.statusCode, friendly.details);
 }

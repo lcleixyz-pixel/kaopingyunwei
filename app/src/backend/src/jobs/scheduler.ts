@@ -11,6 +11,7 @@ import {
   shouldRunDailyBackup,
   toLocalDateKey,
 } from '../services/operationalSettings.js';
+import { logger } from '../utils/logger.js';
 
 // 提醒规则定义
 const REMINDER_RULES: Record<string, { beforeDays: number; message: string }[]> = {
@@ -29,7 +30,7 @@ const REMINDER_RULES: Record<string, { beforeDays: number; message: string }[]> 
  * 初始化所有定时任务
  */
 export function initializeScheduler(): void {
-  console.log('🕐 定时任务调度器已启动');
+  logger.info('定时任务调度器已启动');
   let lastAutoBackupDateKey: string | null = null;
 
   // 每分钟检查一次节点状态、提醒生成和按配置触发自动备份
@@ -44,22 +45,22 @@ export function initializeScheduler(): void {
 
       const now = new Date();
       if (shouldRunDailyBackup(now, settings, lastAutoBackupDateKey)) {
-        console.log('🔄 执行自动备份...');
+        logger.info('开始执行自动备份');
         await performAutoBackup(settings.backupRetentionDays);
         lastAutoBackupDateKey = toLocalDateKey(now);
       }
     } catch (err) {
-      console.error('Scheduler job error:', err);
+      logger.error({ err }, '定时任务执行失败');
     }
   });
 
   // 每天凌晨3点清理临时文件
   cron.schedule('0 3 * * *', async () => {
     try {
-      console.log('🧹 清理临时文件...');
+      logger.info('开始清理临时文件');
       await cleanupTempFiles();
     } catch (err) {
-      console.error('Cleanup job error:', err);
+      logger.error({ err }, '清理临时文件失败');
     }
   });
 }
@@ -84,7 +85,7 @@ async function checkOverdueNodes(): Promise<void> {
   });
 
   for (const node of overdueNodes) {
-    console.log(`⚠️ 节点已逾期: ${node.plan.title} - ${node.nodeType}`);
+    logger.warn({ planTitle: node.plan.title, nodeType: node.nodeType }, '节点已逾期');
   }
 }
 
@@ -148,7 +149,7 @@ async function generateReminders(settings: OperationalSettings): Promise<void> {
               status: 'PENDING',
             },
           });
-          console.log(`📢 生成提醒: ${node.plan.title} - ${rule.message}`);
+          logger.info({ planTitle: node.plan.title, reminder: rule.message }, '已生成提醒');
         }
       }
     }
@@ -172,7 +173,7 @@ async function performAutoBackup(retentionDays: number): Promise<void> {
   const dbPath = path.join(dataDir, 'exam.db');
 
   await fs.copyFile(dbPath, backupPath);
-  console.log(`✅ 自动备份完成: ${backupPath}`);
+  logger.info({ backupPath }, '自动备份完成');
 
   // 清理过期备份
   const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
@@ -183,7 +184,7 @@ async function performAutoBackup(retentionDays: number): Promise<void> {
     const stat = await fs.stat(filePath);
     if (stat.ctime < cutoffDate) {
       await fs.unlink(filePath);
-      console.log(`🗑️ 删除过期备份: ${file}`);
+      logger.info({ file }, '已删除过期备份');
     }
   }
 }

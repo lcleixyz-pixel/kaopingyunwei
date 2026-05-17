@@ -57,6 +57,7 @@ export const config = {
 
   // 日志
   LOG_DIR: process.env.LOG_DIR || path.resolve(process.cwd(), 'data/logs'),
+  LOG_LEVEL: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
   
   // 提醒
   REMINDER_ENABLED: process.env.REMINDER_ENABLED !== 'false',

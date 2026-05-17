@@ -31,10 +31,15 @@ import { canAddCandidateToPlan, isRegistrationClosed, normalizeLevelLabel } from
 import { getRejectedCandidateDisposition } from '../services/prospectiveCandidates.js';
 import { createUploadFileFilter, uploadProfiles } from '../utils/uploadValidation.js';
 import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
+import { createWriteRateLimitMiddleware } from '../services/writeRateLimit.js';
 
 const router = Router();
 
 router.use(authenticate);
+const candidatePhotoRateLimit = createWriteRateLimitMiddleware({
+  routeKey: 'candidate-photo-upload',
+  message: '考生照片上传过于频繁，请稍后再试',
+});
 
 const PRIVATE_DATA_DIR = path.resolve(process.cwd(), 'data', 'private');
 const photoUpload = multer({
@@ -414,7 +419,7 @@ router.get('/:id/photo', async (req, res) => {
 /**
  * POST /api/candidates/:id/photo — 上传或替换指定考生一寸证件照
  */
-router.post('/:id/photo', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), photoUpload.single('photo'), async (req, res) => {
+router.post('/:id/photo', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), candidatePhotoRateLimit, photoUpload.single('photo'), async (req, res) => {
   try {
     if (!req.file) {
       error(res, 'VALIDATION_ERROR', '请选择要上传的证件照', 400);

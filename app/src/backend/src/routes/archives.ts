@@ -20,6 +20,7 @@ import { applyPdfFont, requireChinesePdfFont } from '../utils/pdfFonts.js';
 import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { createUploadFileFilter, uploadProfiles } from '../utils/uploadValidation.js';
 import { publishedPlanWhereForRead } from '../services/accessScope.js';
+import { createWriteRateLimitMiddleware } from '../services/writeRateLimit.js';
 import { resolvePdfTemplateDefinition, type Table5PdfTemplateDefinition } from '../services/pdfTemplates.js';
 import { pdfDocumentOptionsFromTemplate, renderTable5PdfTemplate } from '../services/pdfTemplateRenderer.js';
 import { formatTenantOfficialName } from '../services/tenantOfficialNames.js';
@@ -40,6 +41,10 @@ import {
 const router = Router();
 
 router.use(authenticate);
+const archiveSubmitRateLimit = createWriteRateLimitMiddleware({
+  routeKey: 'archive-submit-upload',
+  message: '档案盖章件提交过于频繁，请稍后再试',
+});
 
 const archiveSchema = z.object({
   planId: z.string().min(1),
@@ -345,7 +350,7 @@ router.get('/batches/:id/signed-file', async (req, res) => {
   }
 });
 
-router.post('/batches/:id/submit', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), signedUpload.single('signedFile'), async (req, res) => {
+router.post('/batches/:id/submit', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), archiveSubmitRateLimit, signedUpload.single('signedFile'), async (req, res) => {
   try {
     const id = String(req.params.id);
     const oldBatch = await prisma.archiveReportBatch.findFirst({

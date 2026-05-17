@@ -26,6 +26,7 @@ import { decrypt } from '../utils/crypto.js';
 import { addWorkDaysWithCalendar } from '../utils/dateUtils.js';
 import { applyPdfFont, requireCertificatePrintFont, requireChinesePdfFont } from '../utils/pdfFonts.js';
 import { createUploadFileFilter, uploadProfiles } from '../utils/uploadValidation.js';
+import { createWriteRateLimitMiddleware } from '../services/writeRateLimit.js';
 import { getWorkdayCalendarConfig } from '../services/workdayCalendars.js';
 import { publishedPlanWhereForRead, tenantWhereForRead } from '../services/accessScope.js';
 import { resolvePdfTemplateDefinition, type CertificatePrintTemplateDefinition, type StandardPdfTemplateDefinition } from '../services/pdfTemplates.js';
@@ -56,6 +57,14 @@ import {
 const router = Router();
 
 router.use(authenticate);
+const certificateImportRateLimit = createWriteRateLimitMiddleware({
+  routeKey: 'certificate-import',
+  message: '证书导入操作过于频繁，请稍后再试',
+});
+const certificateUploadRateLimit = createWriteRateLimitMiddleware({
+  routeKey: 'certificate-upload',
+  message: '证书附件上传过于频繁，请稍后再试',
+});
 
 const dataFilesDir = path.resolve(process.cwd(), 'data/files');
 const privateDataDir = path.resolve(process.cwd(), 'data', 'private');
@@ -376,7 +385,7 @@ router.post('/records', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'
   }
 });
 
-router.post('/records/import-preview', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), importUpload.single('file'), async (req, res) => {
+router.post('/records/import-preview', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), certificateImportRateLimit, importUpload.single('file'), async (req, res) => {
   try {
     const planId = normalizeText(req.body.planId);
     if (!planId) {
@@ -396,7 +405,7 @@ router.post('/records/import-preview', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN',
   }
 });
 
-router.post('/records/import-commit', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), async (req, res) => {
+router.post('/records/import-commit', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), certificateImportRateLimit, async (req, res) => {
   try {
     const result = importCommitSchema.safeParse(req.body);
     if (!result.success) {
@@ -554,7 +563,7 @@ router.get('/supply-requests', async (req, res) => {
   }
 });
 
-router.post('/supply-requests', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), attachmentUpload.single('stampedFile'), async (req, res) => {
+router.post('/supply-requests', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), certificateUploadRateLimit, attachmentUpload.single('stampedFile'), async (req, res) => {
   try {
     const result = supplyRequestSchema.safeParse(req.body);
     if (!result.success) {
@@ -1335,7 +1344,7 @@ router.post('/stocktakes', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async (
   }
 });
 
-router.post('/attachments', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), attachmentUpload.single('file'), async (req, res) => {
+router.post('/attachments', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), certificateUploadRateLimit, attachmentUpload.single('file'), async (req, res) => {
   try {
     const result = attachmentSchema.safeParse(req.body);
     if (!result.success) {

@@ -9,6 +9,7 @@ import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
 import { recordAudit } from '../utils/audit.js';
 import { decrypt } from '../utils/crypto.js';
+import { createWriteRateLimitMiddleware } from '../services/writeRateLimit.js';
 import { canReadAcrossTenants, planTenantWhereForRead, tenantWhereForRead } from '../services/accessScope.js';
 import {
   evaluateScoreRecord,
@@ -22,6 +23,14 @@ import {
 const router = Router();
 
 router.use(authenticate);
+const scoreImportRateLimit = createWriteRateLimitMiddleware({
+  routeKey: 'scores-import',
+  message: '成绩导入操作过于频繁，请稍后再试',
+});
+const scoreBatchRateLimit = createWriteRateLimitMiddleware({
+  routeKey: 'scores-batch',
+  message: '成绩批量保存过于频繁，请稍后再试',
+});
 
 const SCORE_PARTICIPANT_STATUSES = ['APPROVED', 'PASSED', 'FAILED'] as const;
 const NODE_ORDER = [
@@ -156,7 +165,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/import/preview', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async (req, res) => {
+router.post('/import/preview', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), scoreImportRateLimit, async (req, res) => {
   try {
     const parsed = importSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -178,7 +187,7 @@ router.post('/import/preview', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), asy
   }
 });
 
-router.post('/import/commit', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async (req, res) => {
+router.post('/import/commit', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), scoreImportRateLimit, async (req, res) => {
   try {
     const parsed = importSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -238,7 +247,7 @@ router.post('/import/commit', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), asyn
   }
 });
 
-router.post('/batch', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async (req, res) => {
+router.post('/batch', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), scoreBatchRateLimit, async (req, res) => {
   try {
     const parsed = batchScoreSchema.safeParse(req.body);
     if (!parsed.success) {

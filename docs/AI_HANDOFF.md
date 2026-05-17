@@ -30,6 +30,7 @@
 
 - 第一阶段已提交为 `9ac5f4a Harden seed passwords and friendly error handling`：移除固定初始化密码，seed/smoke 改用 `SEED_USER_PASSWORDS_JSON`/`SMOKE_USER_PASSWORDS_JSON`，后端和前端新增中文友好错误底座，证书/档案/证件照上传补充文件类型校验。
 - 第二阶段继续加固：生产环境 `CORS_ORIGIN` 不能为 `*`，必须配置明确前端域名；AI 运维恢复、下载、日志查询已增加 Zod 入参校验和中文友好错误。
+- 第三阶段继续加固：导入、上传和 AI 运维高风险写入口增加内存级限流，超限统一返回中文 `WRITE_RATE_LIMITED`；后端引入 Pino JSON 结构化日志，请求日志和后台任务日志已脱敏 `password`、`token`、`authorization`、`cookie` 等字段。
 - 固定演示口令已从文档、seed、启动脚本和 smoke 脚本中清除；验收账号密码统一从受控环境变量或密码管理器获取。
 
 工程基线：
@@ -138,6 +139,19 @@ Phase 1.3 节点追踪与报名阶段关闭：
 - 审核通过的考生资料再次保存前，前端会提示使用者确认本地上级部门业务系统信息已同步保持一致。
 
 ## 最近验证结果
+
+2026-05-17 第三阶段安全优化验证：
+
+- 新增 `app/src/backend/src/services/writeRateLimit.ts` 和 `app/src/backend/src/utils/logger.ts`，并覆盖单元测试。
+- 导入、上传和 AI 运维高风险写入口已接入 `WRITE_RATE_LIMITED` 中文限流响应；Pino JSON 日志已接入启动、请求、后台任务和友好错误兜底。
+- `node --import tsx --test src/backend/src/services/writeRateLimit.test.ts src/backend/src/utils/logger.test.ts`：通过，5 个测试。
+- `npm run backend:test`：通过，40 个 suite、153 个测试。
+- `npm run lint`：通过。
+- `npm run check`：通过；前端 Vite 构建和后端 TypeScript 编译均通过。Vite 仍提示单个 JS chunk 超过 500 kB，属于性能优化项。
+- `npx prisma migrate status --schema src/backend/prisma/schema.prisma`：通过，11 个 migrations，schema 与数据库一致。
+- `git diff --check`：通过。
+- 固定演示口令扫描无命中。
+- `npm audit --omit=dev --registry=https://registry.npmjs.org`：仍返回已知 2 个 high 风险，`xlsx` direct high 且无自动修复，`lodash` indirect high 可评估自动修复；本轮新增 Pino 未引入新的 audit 项。
 
 2026-05-16 本地远端同步、健康检查和数据安全文档更新：
 

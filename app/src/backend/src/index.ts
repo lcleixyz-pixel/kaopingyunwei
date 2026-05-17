@@ -5,11 +5,11 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import morgan from 'morgan';
 import path from 'path';
 import config, { ensureOperationalDirectories, validateProductionSecrets } from './config/index.js';
 import { error } from './utils/response.js';
 import { respondWithFriendlyError } from './utils/friendlyErrors.js';
+import { createRequestLogger, logger } from './utils/logger.js';
 import { initializeScheduler } from './jobs/scheduler.js';
 
 // 路由
@@ -42,7 +42,7 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(morgan(config.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.use(createRequestLogger());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -107,12 +107,11 @@ ensureOperationalDirectories({
 });
 
 app.listen(PORT, () => {
-  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-  console.log(`  考评分支机构管理系统  后端服务已启动`);
-  console.log(`  端口: ${PORT}`);
-  console.log(`  环境: ${config.NODE_ENV}`);
-  console.log(`  API地址: http://localhost:${PORT}/api`);
-  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  logger.info({
+    port: PORT,
+    env: config.NODE_ENV,
+    apiUrl: `http://localhost:${PORT}/api`,
+  }, '考评分支机构管理系统后端服务已启动');
   
   // 启动定时任务
   initializeScheduler();

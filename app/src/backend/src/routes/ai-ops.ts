@@ -13,12 +13,18 @@ import { success, error } from '../utils/response.js';
 import { recordAudit } from '../utils/audit.js';
 import { getOperationalSettings } from '../services/operationalSettings.js';
 import { downloadFileQuerySchema, logsQuerySchema, restoreBackupSchema } from '../services/aiOpsSchemas.js';
+import { createWriteRateLimitMiddleware } from '../services/writeRateLimit.js';
 import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
 router.use(authenticate);
 router.use(requireRoles('SYS_ADMIN'));
+const aiOpsMutationRateLimit = createWriteRateLimitMiddleware({
+  routeKey: 'ai-ops-mutation',
+  message: 'AI 运维操作过于频繁，请稍后再试',
+});
 
 const execFileAsync = promisify(execFile);
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -96,7 +102,7 @@ router.get('/health', async (_req, res) => {
 /**
  * POST /api/ai-ops/backup — 执行备份
  */
-router.post('/backup', async (req, res) => {
+router.post('/backup', aiOpsMutationRateLimit, async (req, res) => {
   try {
     await ensureBackupDir();
 
@@ -166,7 +172,7 @@ router.get('/backups', async (_req, res) => {
 /**
  * POST /api/ai-ops/restore — 从备份恢复
  */
-router.post('/restore', async (req, res) => {
+router.post('/restore', aiOpsMutationRateLimit, async (req, res) => {
   try {
     const result = restoreBackupSchema.safeParse(req.body);
     if (!result.success) {
@@ -212,7 +218,7 @@ router.post('/restore', async (req, res) => {
 /**
  * POST /api/ai-ops/export — 导出数据（用于迁移）
  */
-router.post('/export', async (req, res) => {
+router.post('/export', aiOpsMutationRateLimit, async (req, res) => {
   try {
     await ensureBackupDir();
 
@@ -334,11 +340,11 @@ async function cleanupOldBackups(): Promise<void> {
       const stat = await fs.stat(filePath);
       if (stat.ctime < cutoffDate) {
         await fs.unlink(filePath);
-        console.log(`Deleted old backup: ${file}`);
+        logger.info({ file }, '已删除过期备份');
       }
     }
   } catch (err) {
-    console.error('Cleanup backups error:', err);
+    logger.error({ err }, '清理过期备份失败');
   }
 }
 
