@@ -26,6 +26,7 @@ import { decrypt } from '../utils/crypto.js';
 import { addWorkDaysWithCalendar } from '../utils/dateUtils.js';
 import { applyPdfFont, requireCertificatePrintFont, requireChinesePdfFont } from '../utils/pdfFonts.js';
 import { createUploadFileFilter, uploadProfiles } from '../utils/uploadValidation.js';
+import { enforceUnpagedListLimit, paginationMeta, parseListPagination } from '../utils/listSafety.js';
 import { createWriteRateLimitMiddleware } from '../services/writeRateLimit.js';
 import { getWorkdayCalendarConfig } from '../services/workdayCalendars.js';
 import { publishedPlanWhereForRead, tenantWhereForRead } from '../services/accessScope.js';
@@ -228,6 +229,10 @@ const attachmentSchema = z.object({
   category: z.string().trim().min(1).max(100),
 });
 
+const completeCertificateNodeSchema = z.object({
+  notes: z.string().trim().max(1000, '备注最多1000字').optional(),
+});
+
 const NODE_ORDER = [
   'PLAN_CREATE',
   'REGISTRATION',
@@ -246,16 +251,24 @@ router.get('/', async (req, res) => {
       ? req.query.status as CertStatus
       : undefined;
 
+    const pagination = parseListPagination(req.query as Record<string, unknown>, {
+      overflowMessage: '证书数据较多，请输入筛选条件或分页查看',
+    });
+    const where = {
+      ...(status ? { status } : {}),
+      candidate: tenantWhereForRead(req),
+    };
     const certificates = await prisma.certificate.findMany({
-      where: {
-        ...(status ? { status } : {}),
-        candidate: tenantWhereForRead(req),
-      },
+      where,
       orderBy: { updatedAt: 'desc' },
+      ...(pagination.skip !== undefined ? { skip: pagination.skip } : {}),
+      take: pagination.take,
       include: certificateInclude(),
     });
+    const visibleCertificates = enforceUnpagedListLimit(certificates, pagination);
+    const total = pagination.isPaginated ? await prisma.certificate.count({ where }) : visibleCertificates.length;
 
-    success(res, certificates.map(sanitizeCertificate));
+    success(res, visibleCertificates.map(sanitizeCertificate), 200, paginationMeta(pagination, total));
   } catch (err) {
     handleRouteError(res, err, '获取证书列表失败');
   }
@@ -1691,7 +1704,12 @@ router.get('/exports/stocktakes.xlsx', async (req, res) => {
 router.post('/plans/:id/complete-node', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async (req, res) => {
   try {
     const planId = String(req.params.id);
-    const notes = normalizeText(req.body?.notes) || '证书管理模块确认完成';
+    const result = completeCertificateNodeSchema.safeParse(req.body || {});
+    if (!result.success) {
+      respondWithFriendlyError(res, result.error, '请求参数错误');
+      return;
+    }
+    const notes = result.data.notes || '证书管理模块确认完成';
     const plan = await prisma.examPlan.findFirst({
       where: { id: planId, tenantId: req.tenantId! },
       include: { nodes: { orderBy: { createdAt: 'asc' } } },

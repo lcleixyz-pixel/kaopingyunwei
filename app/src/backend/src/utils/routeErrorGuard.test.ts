@@ -21,6 +21,21 @@ describe('route error handling guardrails', () => {
 
     assert.deepEqual(offenders, []);
   });
+
+  it('keeps high-risk status and note inputs behind route schemas', () => {
+    const forbiddenPatterns = [
+      /const\s+\{\s*status\s*\}\s*=\s*req\.body/,
+      /normalizeText\(req\.body\?\.notes\)/,
+    ];
+    const offenders = routeFiles()
+      .filter((file) => {
+        const text = readFileSync(file, 'utf8');
+        return forbiddenPatterns.some((pattern) => pattern.test(text));
+      })
+      .map((file) => path.relative(process.cwd(), file));
+
+    assert.deepEqual(offenders, []);
+  });
 });
 
 function routeFiles(dir = routesDir): string[] {

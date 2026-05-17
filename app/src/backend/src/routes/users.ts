@@ -11,6 +11,7 @@ import { error, success } from '../utils/response.js';
 import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { hashPassword } from '../utils/crypto.js';
 import { recordAudit } from '../utils/audit.js';
+import { enforceUnpagedListLimit, paginationMeta, parseListPagination } from '../utils/listSafety.js';
 import {
   canAssignUserRole,
   canManageTargetUser,
@@ -133,13 +134,20 @@ router.get('/', async (req, res) => {
       ];
     }
 
+    const pagination = parseListPagination(req.query as Record<string, unknown>, {
+      overflowMessage: '账号数据较多，请输入筛选条件或分页查看',
+    });
     const users = await prisma.user.findMany({
       where,
       include: userInclude,
       orderBy: [{ tenantId: 'asc' }, { role: 'asc' }, { username: 'asc' }],
+      ...(pagination.skip !== undefined ? { skip: pagination.skip } : {}),
+      take: pagination.take,
     });
+    const visibleUsers = enforceUnpagedListLimit(users, pagination);
+    const total = pagination.isPaginated ? await prisma.user.count({ where }) : visibleUsers.length;
 
-    success(res, users.map(sanitizeUser));
+    success(res, visibleUsers.map(sanitizeUser), 200, paginationMeta(pagination, total));
   } catch (err) {
     respondWithFriendlyError(res, err, '获取账号列表失败');
   }

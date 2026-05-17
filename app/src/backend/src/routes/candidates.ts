@@ -32,6 +32,7 @@ import { getRejectedCandidateDisposition } from '../services/prospectiveCandidat
 import { createUploadFileFilter, uploadProfiles } from '../utils/uploadValidation.js';
 import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { logger } from '../utils/logger.js';
+import { enforceUnpagedListLimit, paginationMeta, parseListPagination } from '../utils/listSafety.js';
 import { createWriteRateLimitMiddleware } from '../services/writeRateLimit.js';
 
 const router = Router();
@@ -69,6 +70,10 @@ const registrationProfileSchema = z.object({
   paymentStatus: z.enum(['UNPAID', 'PAID', '未缴', '已缴']).optional(),
 });
 
+const approveCandidateSchema = z.object({
+  status: z.enum(['APPROVED', 'REJECTED']),
+});
+
 /**
  * GET /api/candidates — 考生列表
  */
@@ -92,9 +97,14 @@ router.get('/', async (req, res) => {
       where.name = { contains: search as string };
     }
 
+    const pagination = parseListPagination(req.query as Record<string, unknown>, {
+      overflowMessage: '考生数据较多，请选择计划、输入搜索条件或分页查看',
+    });
     const candidates = await prisma.candidate.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      ...(pagination.skip !== undefined ? { skip: pagination.skip } : {}),
+      take: pagination.take,
       include: {
         plan: {
           include: {
@@ -109,11 +119,13 @@ router.get('/', async (req, res) => {
         registrationProfile: true,
       },
     });
+    const visibleCandidates = enforceUnpagedListLimit(candidates, pagination);
+    const total = pagination.isPaginated ? await prisma.candidate.count({ where }) : visibleCandidates.length;
 
     const canViewSensitive = canReadAcrossTenants(req.userRole)
       || req.userRole === 'BRANCH_ADMIN'
       || req.userRole === 'BRANCH_STAFF';
-    const sanitizedCandidates = candidates.map((c: any) => {
+    const sanitizedCandidates = visibleCandidates.map((c: any) => {
       const idCard = decrypt(c.idCard);
       return {
         ...c,
@@ -136,7 +148,7 @@ router.get('/', async (req, res) => {
       });
     }
 
-    success(res, sanitizedCandidates);
+    success(res, sanitizedCandidates, 200, paginationMeta(pagination, total));
   } catch (err) {
     respondWithFriendlyError(res, err, '获取考生列表失败');
   }
@@ -633,12 +645,12 @@ router.post('/:id/approve', requireRoles('BRANCH_ADMIN'), async (req, res) => {
   try {
     const id = String(req.params.id);
     const tenantId = req.tenantId!;
-    const { status } = req.body;
-
-    if (!['APPROVED', 'REJECTED'].includes(status)) {
-      error(res, 'VALIDATION_ERROR', '审核状态无效', 400);
+    const result = approveCandidateSchema.safeParse(req.body);
+    if (!result.success) {
+      respondWithFriendlyError(res, result.error, '审核状态无效');
       return;
     }
+    const { status } = result.data;
 
     const oldCandidate = await prisma.candidate.findFirst({
       where: { id, tenantId },

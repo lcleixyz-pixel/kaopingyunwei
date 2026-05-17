@@ -18,6 +18,7 @@ import {
 } from '../services/candidateRegistration.js';
 import { isRegistrationClosed, normalizeLevelLabel } from '../services/phase1Rules.js';
 import { canConvertToFormalCandidate } from '../services/prospectiveCandidates.js';
+import { enforceUnpagedListLimit, paginationMeta, parseListPagination } from '../utils/listSafety.js';
 
 const router = Router();
 
@@ -62,13 +63,20 @@ router.get('/', async (req, res) => {
       ];
     }
 
+    const pagination = parseListPagination(req.query as Record<string, unknown>, {
+      overflowMessage: '意向考生数据较多，请输入搜索条件或分页查看',
+    });
     const candidates = await prisma.prospectiveCandidate.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      ...(pagination.skip !== undefined ? { skip: pagination.skip } : {}),
+      take: pagination.take,
       include: convertedCandidateInclude(),
     });
+    const visibleCandidates = enforceUnpagedListLimit(candidates, pagination);
+    const total = pagination.isPaginated ? await prisma.prospectiveCandidate.count({ where }) : visibleCandidates.length;
 
-    success(res, candidates);
+    success(res, visibleCandidates, 200, paginationMeta(pagination, total));
   } catch (err) {
     respondWithFriendlyError(res, err, '获取意向考生失败');
   }

@@ -24,6 +24,7 @@ import {
 } from '../services/phase1Rules.js';
 import { isRequestedPlanStatusVisibleForRead, planTenantWhereForRead } from '../services/accessScope.js';
 import { getWorkdayCalendarConfig } from '../services/workdayCalendars.js';
+import { enforceUnpagedListLimit, paginationMeta, parseListPagination } from '../utils/listSafety.js';
 
 const router = Router();
 
@@ -97,9 +98,14 @@ router.get('/', async (req, res) => {
       ];
     }
 
+    const pagination = parseListPagination(req.query as Record<string, unknown>, {
+      overflowMessage: '计划数据较多，请输入筛选条件或分页查看',
+    });
     const plans = await prisma.examPlan.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      ...(pagination.skip !== undefined ? { skip: pagination.skip } : {}),
+      take: pagination.take,
       include: {
         tenant: {
           select: { id: true, code: true, name: true, type: true },
@@ -115,8 +121,10 @@ router.get('/', async (req, res) => {
         },
       },
     });
+    const visiblePlans = enforceUnpagedListLimit(plans, pagination);
+    const total = pagination.isPaginated ? await prisma.examPlan.count({ where }) : visiblePlans.length;
 
-    success(res, plans.map(withRegistrationClosed));
+    success(res, visiblePlans.map(withRegistrationClosed), 200, paginationMeta(pagination, total));
   } catch (err) {
     respondWithFriendlyError(res, err, '获取计划列表失败');
   }

@@ -179,6 +179,7 @@ npm run backend:start
 - 导入、上传和 AI 运维高风险写入口限流有效：连续触发同一入口达到阈值后返回 429、错误码 `WRITE_RATE_LIMITED`、中文提示和 `Retry-After` 响应头。
 - 后端日志为 Pino JSON 格式，启动日志、请求日志和后台任务日志可按字段检索；抽查日志不得出现明文密码、Token、Cookie 或初始化密码 JSON。
 - 后端路由护栏测试通过：路由文件不使用零散 `console.error`，不直接返回 Zod 原始 `error.message`。
+- 核心列表接口有大数据保护：不分页读取超出安全上限时返回中文 `LIST_TOO_LARGE`，分页参数非法时返回中文 `VALIDATION_ERROR`。
 - `.env`、SQLite 数据库、上传文件、备份包、迁移包没有进入 Git；当前仓库是 public 时尤其要确认。
 - AI 运维可生成备份，且至少一份备份已复制到服务器外部位置。
 - 至少抽测一次恢复流程或恢复预案：确认目标 volume、启动容器、访问 `/api/health`、登录并读取一条核心业务数据。

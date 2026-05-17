@@ -16,16 +16,25 @@ interface ApiResponse<T> {
   meta: {
     timestamp: string;
     requestId: string;
+    pagination?: {
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
+    };
   };
 }
 
-export function success<T>(res: Response, data: T, statusCode = 200): void {
+type SuccessMeta = Pick<ApiResponse<never>, 'meta'>['meta'];
+
+export function success<T>(res: Response, data: T, statusCode = 200, extraMeta?: Partial<SuccessMeta>): void {
   const response: ApiResponse<T> = {
     success: true,
     data,
     meta: {
       timestamp: new Date().toISOString(),
       requestId: uuidv4(),
+      ...extraMeta,
     },
   };
   res.status(statusCode).json(response);
