@@ -20,10 +20,12 @@ import type {
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { recordAudit } from '../utils/audit.js';
 import { decrypt } from '../utils/crypto.js';
 import { addWorkDaysWithCalendar } from '../utils/dateUtils.js';
-import { applyPdfFont, PdfFontMissingError, requireCertificatePrintFont, requireChinesePdfFont } from '../utils/pdfFonts.js';
+import { applyPdfFont, requireCertificatePrintFont, requireChinesePdfFont } from '../utils/pdfFonts.js';
+import { createUploadFileFilter, uploadProfiles } from '../utils/uploadValidation.js';
 import { getWorkdayCalendarConfig } from '../services/workdayCalendars.js';
 import { publishedPlanWhereForRead, tenantWhereForRead } from '../services/accessScope.js';
 import { resolvePdfTemplateDefinition, type CertificatePrintTemplateDefinition, type StandardPdfTemplateDefinition } from '../services/pdfTemplates.js';
@@ -74,6 +76,7 @@ const certificatePhotoPrintField: CertificatePrintTemplateDefinition['fields'][n
 const importUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: createUploadFileFilter(uploadProfiles.spreadsheet, '证书编号导入文件'),
 });
 
 const attachmentUpload = multer({
@@ -88,6 +91,7 @@ const attachmentUpload = multer({
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: createUploadFileFilter(uploadProfiles.signedAttachment, '证书附件'),
 });
 
 const itemTypeSchema = z.enum(['BLANK_CERT', 'CERT_SHELL']);
@@ -2530,16 +2534,7 @@ function nodeOrder(nodeType: string): number {
 }
 
 function handleRouteError(res: Response, err: unknown, fallbackMessage: string): void {
-  if (err instanceof RouteError) {
-    error(res, err.code, err.message, err.statusCode);
-    return;
-  }
-  if (err instanceof PdfFontMissingError) {
-    error(res, err.code, err.message, err.statusCode);
-    return;
-  }
-  console.error(fallbackMessage, err);
-  error(res, 'INTERNAL_ERROR', fallbackMessage, 500);
+  respondWithFriendlyError(res, err, fallbackMessage);
 }
 
 class RouteError extends Error {

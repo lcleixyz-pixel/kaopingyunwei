@@ -64,13 +64,9 @@ npm run backend:dev
 npm run dev
 ```
 
-## 默认登录账号
+## 初始化账号
 
-| 角色 | 用户名 | 密码 |
-|------|--------|------|
-| 系统管理员 | admin | admin123 |
-| 总部管理员 | hqadmin | hqadmin123 |
-| 分部管理员 | bjadmin | bjadmin123 |
+seed 会创建系统管理员、总部管理员和分支账号；密码必须通过 `SEED_USER_PASSWORDS_JSON` 注入，或在非生产环境由 seed 生成一次性密码并立即保存到受控密码管理位置。仓库文档不再记录固定演示密码。
 
 ## 9大考评节点
 

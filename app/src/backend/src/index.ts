@@ -9,6 +9,7 @@ import morgan from 'morgan';
 import path from 'path';
 import config, { ensureOperationalDirectories, validateProductionSecrets } from './config/index.js';
 import { error } from './utils/response.js';
+import { respondWithFriendlyError } from './utils/friendlyErrors.js';
 import { initializeScheduler } from './jobs/scheduler.js';
 
 // 路由
@@ -93,8 +94,7 @@ app.get('*', (_req, res) => {
 
 // ─── 全局错误处理 ───
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error('Error:', err);
-  error(res, 'INTERNAL_ERROR', err.message || '服务器内部错误', 500);
+  respondWithFriendlyError(res, err, '服务器内部错误，请稍后再试');
 });
 
 // ─── 启动 ───

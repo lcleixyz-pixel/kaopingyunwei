@@ -198,8 +198,8 @@ docker compose --env-file .env -f docker/docker-compose.yml up -d
 
 ## 上线后必须做
 
-1. 用 `admin / admin123` 首次登录。
-2. 立即修改 `admin`、`hqadmin`、分支管理员和工作人员默认密码。
+1. 使用 `SEED_USER_PASSWORDS_JSON` 或受控密码管理器中的初始化密码首次登录。
+2. 立即轮换 `admin`、`hqadmin`、分支管理员和工作人员初始化密码。
 3. 确认 `hqadmin`、分支管理员和工作人员账号权限正常。
 4. 打开仪表盘、报名资料、成绩、证书、档案、AI 运维、系统设置。
 5. 执行一次手动备份。
@@ -239,7 +239,7 @@ https://exam.example.com
 - `teststaff` 或分支工作人员访问 `/api/settings` 返回 403。
 - 未知 API 返回 JSON 404。
 - `.env` 中 `CORS_ORIGIN` 不是 `*`。
-- 默认账号密码已修改并记录在受控密码管理位置。
+- 初始化账号密码已轮换并记录在受控密码管理位置。
 - AI 运维备份可生成，且至少一份备份已复制到服务器外部位置。
 - `npm audit --omit=dev --registry=https://registry.npmjs.org` 的结果已记录；已知 `xlsx` 风险按 `docs/DATA_SECURITY_BASELINE.md` 管理。
 

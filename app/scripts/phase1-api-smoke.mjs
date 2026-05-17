@@ -5,13 +5,14 @@ const HQ_TENANT_CODE = process.env.HQ_TENANT_CODE || 'NGTCS0013';
 const BRANCH_TENANT_CODE = process.env.BRANCH_TENANT_CODE || 'BJ001';
 const LEVEL3_WORK_YEARS_CONDITION = '累计从事本职业或相关职业工作满10年。';
 const LEVEL3_WORK_YEARS_MATERIAL_KEY = 'condition_level3_1_work_years_10_commitment_social_security';
+const smokePasswords = readSmokeUserPasswords();
 
 async function main() {
   const unique = Date.now();
-  const sys = await login({ username: 'admin', password: 'admin123', tenantCode: HQ_TENANT_CODE });
-  const branch = await login({ username: 'bjadmin', password: 'bjadmin123', tenantCode: BRANCH_TENANT_CODE });
-  const branchStaff = await login({ username: 'bjstaff', password: 'bjstaff123', tenantCode: BRANCH_TENANT_CODE });
-  const hq = await login({ username: 'hqadmin', password: 'hqadmin123', tenantCode: HQ_TENANT_CODE });
+  const sys = await login({ username: 'admin', password: smokePasswords.admin, tenantCode: HQ_TENANT_CODE });
+  const branch = await login({ username: 'bjadmin', password: smokePasswords.bjadmin, tenantCode: BRANCH_TENANT_CODE });
+  const branchStaff = await login({ username: 'bjstaff', password: smokePasswords.bjstaff, tenantCode: BRANCH_TENANT_CODE });
+  const hq = await login({ username: 'hqadmin', password: smokePasswords.hqadmin, tenantCode: HQ_TENANT_CODE });
 
   const examDate = new Date();
   examDate.setDate(examDate.getDate() + 45);
@@ -490,6 +491,30 @@ function assertEqual(actual, expected, message) {
   if (actual !== expected) {
     throw new Error(`${message}; expected ${expected}, got ${actual}`);
   }
+}
+
+function readSmokeUserPasswords() {
+  const source = process.env.SMOKE_USER_PASSWORDS_JSON || process.env.SEED_USER_PASSWORDS_JSON;
+  if (!source) {
+    throw new Error(
+      '请设置 SMOKE_USER_PASSWORDS_JSON 后再运行验收脚本，格式示例：{"admin":"强密码","bjadmin":"强密码","bjstaff":"强密码","hqadmin":"强密码"}。'
+    );
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    throw new Error('SMOKE_USER_PASSWORDS_JSON 不是有效 JSON，请使用 {"用户名":"密码"} 的对象格式。');
+  }
+
+  const required = ['admin', 'bjadmin', 'bjstaff', 'hqadmin'];
+  const missing = required.filter((username) => typeof parsed?.[username] !== 'string' || parsed[username].length === 0);
+  if (missing.length > 0) {
+    throw new Error(`验收脚本缺少以下账号密码：${missing.join('、')}。请补充 SMOKE_USER_PASSWORDS_JSON。`);
+  }
+
+  return Object.fromEntries(required.map((username) => [username, parsed[username]]));
 }
 
 main().catch((error) => {

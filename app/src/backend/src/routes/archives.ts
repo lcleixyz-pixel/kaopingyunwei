@@ -16,7 +16,9 @@ import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
 import { decrypt, sha256 } from '../utils/crypto.js';
 import { recordAudit } from '../utils/audit.js';
-import { applyPdfFont, PdfFontMissingError, requireChinesePdfFont } from '../utils/pdfFonts.js';
+import { applyPdfFont, requireChinesePdfFont } from '../utils/pdfFonts.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
+import { createUploadFileFilter, uploadProfiles } from '../utils/uploadValidation.js';
 import { publishedPlanWhereForRead } from '../services/accessScope.js';
 import { resolvePdfTemplateDefinition, type Table5PdfTemplateDefinition } from '../services/pdfTemplates.js';
 import { pdfDocumentOptionsFromTemplate, renderTable5PdfTemplate } from '../services/pdfTemplateRenderer.js';
@@ -85,16 +87,7 @@ const signedUpload = multer({
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, callback) => {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    const allowedExts = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
-    const allowedMimes = new Set(['application/pdf', 'image/jpeg', 'image/png']);
-    if (allowedExts.has(ext) || allowedMimes.has(file.mimetype)) {
-      callback(null, true);
-      return;
-    }
-    callback(new RouteError('INVALID_FILE_TYPE', '盖章件仅支持 PDF/JPG/PNG', 400));
-  },
+  fileFilter: createUploadFileFilter(uploadProfiles.signedAttachment, '盖章件'),
 });
 
 router.get('/reportable-plans', async (req, res) => {
@@ -831,16 +824,7 @@ function encodeContentDisposition(filename: string): string {
 }
 
 function handleRouteError(res: Response, err: unknown, fallbackMessage: string): void {
-  if (err instanceof RouteError) {
-    error(res, err.code, err.message, err.statusCode);
-    return;
-  }
-  if (err instanceof PdfFontMissingError) {
-    error(res, err.code, err.message, err.statusCode);
-    return;
-  }
-  console.error(fallbackMessage, err);
-  error(res, 'INTERNAL_ERROR', fallbackMessage, 500);
+  respondWithFriendlyError(res, err, fallbackMessage);
 }
 
 class RouteError extends Error {

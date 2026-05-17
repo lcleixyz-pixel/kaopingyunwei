@@ -29,6 +29,8 @@ import {
 import { CandidatePhotoError, processCandidatePhoto } from '../services/candidatePhotos.js';
 import { canAddCandidateToPlan, isRegistrationClosed, normalizeLevelLabel } from '../services/phase1Rules.js';
 import { getRejectedCandidateDisposition } from '../services/prospectiveCandidates.js';
+import { createUploadFileFilter, uploadProfiles } from '../utils/uploadValidation.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 
 const router = Router();
 
@@ -38,6 +40,7 @@ const PRIVATE_DATA_DIR = path.resolve(process.cwd(), 'data', 'private');
 const photoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: createUploadFileFilter(uploadProfiles.photo, '考生照片'),
 });
 
 const candidateSchema = z.object({
@@ -468,8 +471,7 @@ router.post('/:id/photo', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAF
       error(res, err.code, err.message, err.statusCode);
       return;
     }
-    console.error('Upload candidate photo error:', err);
-    error(res, 'INTERNAL_ERROR', '上传证件照失败', 500);
+    respondWithFriendlyError(res, err, '上传证件照失败');
   }
 });
 

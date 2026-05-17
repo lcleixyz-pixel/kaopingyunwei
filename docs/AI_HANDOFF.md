@@ -117,9 +117,9 @@ Phase 1.2：
   - 职业“首饰设计师”：工种“首饰设计师”。
 - 报名资料固定选项已实现：文化程度、所在省（市）区、考生来源、报名单位、认定分类、考试类型。
 - 参加工作时间、电子邮箱、户籍所在地、政治面貌、学历证书编号、简要经历、通讯地址、邮政编码、邮寄地址均为非必填项，不影响审核通过。
-- 本地 SQLite 和 Docker SQLite 已按当前开发环境重置并重新 seed 默认租户和默认账号；不设计自动清生产数据脚本。
+- 本地 SQLite 和 Docker SQLite 已按当前开发环境重置并重新 seed 默认租户和初始化账号；不设计自动清生产数据脚本。
 - Docker 后端启动已修复 fresh SQLite 文件不存在时 Prisma `migrate deploy` 失败的问题：容器启动前先确保 `/app/data/exam.db` 文件存在。
-- `seed.ts` 已清理演示计划/演示考生，只保留默认租户和默认账号。
+- `seed.ts` 已清理演示计划/演示考生，只保留默认租户和初始化账号。
 - `docs/PROJECT_CONTEXT.md`、`docs/BUSINESS_RULES.md`、`docs/ROLE_MATRIX.md`、`docs/API_CONVENTIONS.md`、`docs/ACCEPTANCE_CHECKLIST.md` 已同步本轮规则。
 
 Phase 1.3 节点追踪与报名阶段关闭：
@@ -138,7 +138,7 @@ Phase 1.3 节点追踪与报名阶段关闭：
 - GitHub 远端：`https://github.com/lcleixyz-pixel/kaopingyunwei.git`，仓库 `lcleixyz-pixel/kaopingyunwei`，默认分支 `main`，当前 visibility 为 public。
 - 本地同步状态：`main...origin/main` 为 `0 ahead / 0 behind`，开始执行前工作区干净。
 - 本轮只更新文档，不改业务代码、不升级依赖、不执行数据库 migration。
-- 新增 `docs/DATA_SECURITY_BASELINE.md`，记录生产密钥、默认账号、CORS、HTTPS、SQLite/上传文件/备份、迁移包、审计日志和依赖安全基线。
+- 新增 `docs/DATA_SECURITY_BASELINE.md`，记录生产密钥、初始化账号、CORS、HTTPS、SQLite/上传文件/备份、迁移包、审计日志和依赖安全基线。
 - 已同步更新 `docs/DEPLOYMENT_CLOUD.md`、`docs/ACCEPTANCE_CHECKLIST.md` 和 `docs/DECISIONS.md`，把数据安全基线纳入部署、验收和架构决策。
 - `npm run check`：通过；前端 Vite 构建和后端 TypeScript 编译均通过。Vite 仍提示单个 JS chunk 超过 500 kB，属于性能优化项。
 - `npm run backend:test`：通过，32 个 suite、124 个测试。
@@ -171,14 +171,14 @@ Phase 1.3 节点追踪与报名阶段关闭：
 - `API_BASE_URL=http://localhost:3001/api npm run phase1:smoke`：通过；覆盖计划创建、9 节点、草稿阻断、发布、意向转正式、报名资料、导出 `.xls`、上传回填关闭报名、总部报表、回退和取消闭环。
 - API 权限抽测：未登录 `/api/dashboard` 返回 401；总部访问 `/api/prospective-candidates` 返回 403；分支工作人员删除意向考生返回 403；北京分部读取新疆计划详情返回 404；北京分部修改全局 `/api/settings` 返回 403。
 - 浏览器验收 `http://localhost:3000`：系统管理员打开仪表盘、考评计划、节点追踪、报名资料、成绩管理、证书管理、档案管理、AI 运维、系统设置均非白屏，无框架错误层，console error/warn 为空。
-- 浏览器角色验收：`bjadmin/bjadmin123` 可见“意向考生”，默认“跟进中”，报名资料工作台显示“缴费”列；`bjstaff/bjstaff123` 不可见系统设置，直接访问 `/settings` 回到工作台，意向考生页无删除入口；`hqadmin/hqadmin123` 和 `admin/admin123` 直接访问 `/prospective-candidates` 回到工作台，报名资料工作台不显示“缴费”列。
+- 浏览器角色验收：分支管理员账号可见“意向考生”，默认“跟进中”，报名资料工作台显示“缴费”列；分支工作人员账号不可见系统设置，直接访问 `/settings` 回到工作台，意向考生页无删除入口；总部管理员和系统管理员账号直接访问 `/prospective-candidates` 回到工作台，报名资料工作台不显示“缴费”列。账号密码见受控配置。
 - 浏览器交互验收：总部报名资料工作台选择已发布计划后，统计卡片和空状态正确刷新，表头无“缴费”列。
 - 移动视口 390x844 抽测分支工作人员仪表盘：页面非白屏，无框架错误层，console error/warn 为空。
 - 观察到一个角色策略口径差异：`BRANCH_ADMIN` 可进入“系统设置”的“工作日历”页并维护本分支工作日历，后端也允许 `PATCH /settings/workday-calendars`；但 `docs/ROLE_MATRIX.md` 的 MVP 页面权限仍写着分支管理员系统设置“不开放”。需要后续明确这是设计变更还是文档需同步。
 
 2026-05-11 生产验收测试：
 
-- 已清理宿主机本地 SQLite `app/data/exam.db` 并重新执行 Prisma migration + seed；清理后为 3 个租户、5 个默认账号、0 条计划/考生/意向考生/证书/审计业务记录。
+- 已清理宿主机本地 SQLite `app/data/exam.db` 并重新执行 Prisma migration + seed；清理后为 3 个租户、5 个初始化账号、0 条计划/考生/意向考生/证书/审计业务记录。
 - 已执行 `EXAM_PORT=8080 docker compose --env-file .env -f docker/docker-compose.yml down -v` 清理 Docker 测试数据卷，并重新启动干净 Docker 环境。
 - `npm run backend:test`：通过，58 个测试。
 - `npm run check`：通过；前端 Vite 构建和后端 TypeScript 编译均通过。构建仍提示单个 JS chunk 超过 500 kB，属于性能优化项。
@@ -190,7 +190,7 @@ Phase 1.3 节点追踪与报名阶段关闭：
 - `API_BASE_URL=http://localhost:8080/api npm run phase1:smoke`：通过；脚本已更新为当前“申报条件”固定选项和材料闸门，覆盖计划、节点、考生、意向转正式、导出、上传回填、报名关闭、回退、取消和总部报表闭环。
 - API 权限抽测：未登录 `/api/dashboard` 返回 401；总部访问 `/api/prospective-candidates` 返回 403；北京分部无法读取上海分部计划，详情返回 404。
 - 浏览器验收 `http://localhost:8080`：系统管理员登录后打开仪表盘、考评计划、节点追踪、考生管理、成绩管理、证书管理、档案管理、AI 运维、系统设置，页面均非白屏，无框架错误层，过滤 `localhost:8080` 的 console error/warn 为空。
-- 浏览器角色验收：`bjadmin/bjadmin123` 可见“意向考生”，默认“跟进中”，报名资料工作台显示“缴费”列；`hqadmin/hqadmin123` 不可见“意向考生”，访问该路由回到仪表盘，报名资料工作台不显示“缴费”列。
+- 浏览器角色验收：分支管理员账号可见“意向考生”，默认“跟进中”，报名资料工作台显示“缴费”列；总部管理员账号不可见“意向考生”，访问该路由回到仪表盘，报名资料工作台不显示“缴费”列。账号密码见受控配置。
 - 移动视口 390x844 抽测仪表盘：页面非白屏，无框架错误层，console error/warn 为空。
 - Docker 构建期间 `npm audit` 提示 11 个依赖漏洞（3 moderate、8 high），生产上线前建议单独安排依赖安全治理。
 - 本轮验收写入的 Docker 测试计划、意向考生和审计记录已在收尾阶段通过清理 Docker 数据卷移除；宿主机本地 SQLite 仍保持默认 seed 基线。
@@ -215,7 +215,7 @@ Phase 1.3 节点追踪与报名阶段关闭：
 本轮 Phase 1.2 浏览器角色回归，执行于 2026-05-09：
 
 - 本地应用 `http://localhost:8080/api/health`：通过，返回 `{"status":"ok","version":"1.0.0"}`。
-- 使用分支管理员 `bjadmin/bjadmin123` 登录：通过；导航顺序仍为“仪表盘 -> 意向考生 -> 考评计划”，分支侧可见“意向考生”和报名资料工作台缴费列。
+- 使用分支管理员账号登录：通过；导航顺序仍为“仪表盘 -> 意向考生 -> 考评计划”，分支侧可见“意向考生”和报名资料工作台缴费列。密码见受控配置。
 - 在“意向考生”页面新增测试记录：通过；测试记录为 `浏览器回归24062717`，手机号 `17124062717`，来源 `浏览器回归`。
 - 将该意向考生转正式：通过；选择已发布且报名未截止计划 `789`，补证件号 `110101199001062717` 后转入报名资料工作台。转入后“跟进中”默认列表不再显示该意向考生。
 - 在“报名资料工作台”选择计划 `789`：通过；可看到正式考生 `浏览器回归24062717`，初始状态为模板资料 `8项待补`、材料 `5项待补`、审核 `待审核`、缴费 `未缴`。
@@ -223,8 +223,8 @@ Phase 1.3 节点追踪与报名阶段关闭：
 - 点击“通过”审核：通过；列表显示审核 `已通过`。
 - `.xls` 导出后端验证：通过；`GET /api/candidates/export?planId=4350d98e-0d93-4fff-b780-65c1d3bf5311` 返回 `200`，`content-type` 为 `application/vnd.ms-excel`，文件名为 `789-考生信息模板.xls`，大小 `5632` bytes。解析结果为 2 行，第 1 行是模板表头；第 2 行包含 `浏览器回归24062717`，工种 `玉石检验员`、等级 `三级/高级工`、手机号 `17124062717`、文化程度 `大学本科`、所在省 `北京市`、考生来源 `其它`、报名单位 `国家珠宝玉石首饰检验集团有限公司`、民族 `汉族`、专业年限 `10`。
 - 上传回填后端验证：通过；由于当前浏览器层点击“上传回填”触发运行包中的 `window.prompt()`（见问题记录），改用 API 记录上传回填。`POST /api/exam-plans/4350d98e-0d93-4fff-b780-65c1d3bf5311/local-upload-batches` 返回 `201`，生成批次 `f0ca6646-65b9-49bc-a22c-787bee303d24`。计划 `789` 的“考试报名”节点已完成，`ROOM_ARRANGE` 节点进入 `IN_PROGRESS`，计划下拉显示 `789（报名已结束）`。
-- 使用总部管理员 `hqadmin/hqadmin123` 登录验证：通过；侧边栏无“意向考生”菜单。进入报名资料工作台并选择 `789（报名已结束）` 后，表头为“姓名、计划、证件号码、模板资料、材料、审核、操作”，不显示“缴费”列；考生行不显示 `已缴` 或 `未缴`。
-- 使用系统管理员 `admin/admin123` 登录验证：通过；侧边栏无“意向考生”菜单。进入报名资料工作台并选择 `789（报名已结束）` 后，表头和考生行同样不显示缴费字段。
+- 使用总部管理员账号登录验证：通过；侧边栏无“意向考生”菜单。进入报名资料工作台并选择 `789（报名已结束）` 后，表头为“姓名、计划、证件号码、模板资料、材料、审核、操作”，不显示“缴费”列；考生行不显示 `已缴` 或 `未缴`。密码见受控配置。
+- 使用系统管理员账号登录验证：通过；侧边栏无“意向考生”菜单。进入报名资料工作台并选择 `789（报名已结束）` 后，表头和考生行同样不显示缴费字段。密码见受控配置。
 
 本轮发现的问题：
 
@@ -242,7 +242,7 @@ Phase 1.3 节点追踪与报名阶段关闭：
   - 命令：`VITE_API_URL=http://localhost:8080/api npm run dev -- --host 0.0.0.0`
   - 前端地址：`http://localhost:3000`
   - API 地址：`http://localhost:8080/api`
-- 已在 `http://localhost:3000/candidates` 使用 `bjadmin/bjadmin123` 验证最新源码前端：选择 `789（报名已结束）` 后点击“上传回填”，页面显示“地方系统上传回填”弹窗，包含备注框、“报名截止，结束考试报名阶段”、“还要添加考生，暂不截止报名”和“取消”按钮；过滤 `localhost:3000` 的 console error/warn 为空。
+- 已在 `http://localhost:3000/candidates` 使用分支管理员账号验证最新源码前端：选择 `789（报名已结束）` 后点击“上传回填”，页面显示“地方系统上传回填”弹窗，包含备注框、“报名截止，结束考试报名阶段”、“还要添加考生，暂不截止报名”和“取消”按钮；过滤 `localhost:3000` 的 console error/warn 为空。密码见受控配置。
 
 2026-05-09 成绩管理 500 修复记录：
 
@@ -257,7 +257,7 @@ Phase 1.3 节点追踪与报名阶段关闭：
 - 启动日志显示已应用 `20260509170000_score_recording_workflow` migration，seed 检测到已有数据并跳过初始化。
 - 验证：
   - `GET http://localhost:8080/api/health`：通过。
-  - `GET /api/scores/plans` 使用 `bjadmin/bjadmin123` token：返回 200，包含计划 `123 · 2026/05/30 · 贵金属首饰与宝玉石检测员 · 五级/初级工`。
+  - `GET /api/scores/plans` 使用分支管理员 token：返回 200，包含计划 `123 · 2026/05/30 · 贵金属首饰与宝玉石检测员 · 五级/初级工`。
   - 容器内 `/app/src/backend/dist/routes/scores.js` 已能 grep 到 `router.get('/plans'...)`。
   - 浏览器打开 `http://localhost:3000/scores`：成绩管理页加载正常，默认选中计划 `123`，显示统计卡片和手动检录表；页面无 `Request failed with status code 500`，过滤 `localhost:3000` 的 console error/warn 为空。
 
@@ -280,10 +280,10 @@ Codex 傻瓜式环境启动步骤：
    ```bash
    VITE_API_URL=http://localhost:8080/api npm run dev -- --host 0.0.0.0
    ```
-5. 打开 `http://localhost:3000` 做浏览器回归；默认账号：
-   - 分支管理员：`bjadmin / bjadmin123`
-   - 总部管理员：`hqadmin / hqadmin123`
-   - 系统管理员：`admin / admin123`
+5. 打开 `http://localhost:3000` 做浏览器回归；使用初始化账号，密码从 `SEED_USER_PASSWORDS_JSON` 或受控密码管理器获取：
+   - 分支管理员：`bjadmin`
+   - 总部管理员：`hqadmin`
+   - 系统管理员：`admin`
 6. 健康检查：
    ```bash
    curl http://localhost:8080/api/health
@@ -292,14 +292,14 @@ Codex 傻瓜式环境启动步骤：
 
 本轮复现步骤：
 
-1. 打开 `http://localhost:8080`，使用 `bjadmin/bjadmin123` 登录。
+1. 打开 `http://localhost:8080`，使用分支管理员账号登录，密码见受控配置。
 2. 进入“意向考生”，点击“新增意向考生”，填写姓名 `浏览器回归24062717`、手机号 `17124062717`、来源 `浏览器回归`，保存。
 3. 在该行点击“转正式”，选择计划 `789`，填写证件号 `110101199001062717`，确认转正式。
 4. 进入“考生管理/报名资料工作台”，选择计划 `789`，打开该考生“资料”，补齐必填模板字段、勾选材料、缴费改为 `已缴`，保存。
 5. 在列表点击“通过”，确认审核状态变为 `已通过`。
 6. 调用导出接口或用真实 Chrome 下载 `.xls`，抽查表头和 `浏览器回归24062717` 数据行。
 7. 点击“上传回填”时若仍出现 `prompt() is not supported`，说明运行前端包未更新；可先重建前端镜像/刷新 bundle，再重试页面弹窗。后端可用 `POST /api/exam-plans/:id/local-upload-batches` 验证上传回填闭环。
-8. 分别登录 `hqadmin/hqadmin123` 和 `admin/admin123`，确认侧边栏没有“意向考生”；进入报名资料工作台选择 `789（报名已结束）`，确认无“缴费”列且行内无缴费值。
+8. 分别登录总部管理员和系统管理员账号，确认侧边栏没有“意向考生”；进入报名资料工作台选择 `789（报名已结束）`，确认无“缴费”列且行内无缴费值。密码见受控配置。
 
 上一轮 Phase 1.2 命令验证：
 
@@ -318,7 +318,7 @@ Codex 傻瓜式环境启动步骤：
 API 验证：
 
 - `GET /api/health`：通过。
-- `POST /api/auth/login` 使用 `admin/admin123`：通过。
+- `POST /api/auth/login` 使用系统管理员账号：通过。密码见受控配置。
 - `/api/dashboard`：通过。
 - `/api/dashboard/reports`：通过。
 - `/api/reminders/count`：通过。
@@ -331,7 +331,7 @@ API 验证：
 最近一轮浏览器验证，发生在最终清库之前：
 
 - 使用 Chrome 打开 `http://localhost:8080`。
-- 使用 `bjadmin/bjadmin123` 登录。
+- 使用分支管理员账号登录。密码见受控配置。
 - 已确认分支导航顺序为“仪表盘 -> 意向考生 -> 考评计划”。
 - 已打开 `http://localhost:8080/prospective-candidates`，页面加载正常。
 - 已确认进入意向考生页面默认选中“跟进中”，不再默认选中“全部”。
@@ -349,17 +349,17 @@ Docker 验证：
 - 后端容器启动后成功创建 fresh SQLite 文件、执行 Prisma migration 和 seed，`exam-backend` 状态为 healthy。
 - 前端容器通过 `localhost:8080` 提供服务。
 - `GET http://localhost:8080/api/health`：通过。
-- `POST http://localhost:8080/api/auth/login` 使用 `admin/admin123`：通过。
-- Chrome 打开 `http://localhost:8080`，默认账号登录成功。
+- `POST http://localhost:8080/api/auth/login` 使用系统管理员账号：通过。密码见受控配置。
+- Chrome 打开 `http://localhost:8080`，初始化账号登录成功。
 - Chrome 打开 `http://localhost:8080/ai-ops`，AI 运维页显示容器内真实健康状态。
 
 2026-05-10 证书管理严格回归记录：
 
 - 测试环境：Docker 运行包 `http://localhost:8080`，后端健康检查通过；浏览器使用真实 Chrome + Computer Use 操作，接口使用 8080 API。注意：宿主机 Prisma 会写入宿主本地 SQLite，8080 页面实际使用 Docker 容器内 `/app/data/exam.db`，本轮有效测试数据均重新写入 Docker DB。
 - 本轮有效计划：`CERT-STRICT-1778360499890`，计划 ID `93009dca-b637-408e-853b-49616d2e17e1`，北京分部，4 名考生：2 名合格、1 名未录成绩、1 名不合格；仅 2 名合格考生进入证书编号回填表。
-- 分支管理员 `bjadmin/bjadmin123` 浏览器验证：证书页能选择严格计划，显示“合格 2”；编号回填区有 `.xlsx` 选择文件、预览导入、提交回填、单行保存和“完成证书管理节点”按钮；未录成绩和不合格考生未出现在证书记录表。
-- 总部管理员 `hqadmin/hqadmin123` 浏览器验证：侧边栏没有“意向考生”；证书编号回填区没有上传、保存、提交回填和完成节点按钮；申领与库存页显示跨机构库存、低库存提醒、审批/驳回、Word 和导出台账入口。
-- 系统管理员 `admin/admin123` 浏览器验证：侧边栏没有“意向考生”；严格计划下两名合格考生和两个证书编号可见，但编号输入框为 disabled，行内无保存/标记打印按钮，也无上传/提交回填/完成节点按钮。
+- 分支管理员账号浏览器验证：证书页能选择严格计划，显示“合格 2”；编号回填区有 `.xlsx` 选择文件、预览导入、提交回填、单行保存和“完成证书管理节点”按钮；未录成绩和不合格考生未出现在证书记录表。密码见受控配置。
+- 总部管理员账号浏览器验证：侧边栏没有“意向考生”；证书编号回填区没有上传、保存、提交回填和完成节点按钮；申领与库存页显示跨机构库存、低库存提醒、审批/驳回、Word 和导出台账入口。密码见受控配置。
+- 系统管理员账号浏览器验证：侧边栏没有“意向考生”；严格计划下两名合格考生和两个证书编号可见，但编号输入框为 disabled，行内无保存/标记打印按钮，也无上传/提交回填/完成节点按钮。密码见受控配置。
 - 导入编号测试：
   - 有效 `.xlsx` 预览通过，提交后为 `严格回归合格甲9890` 写入 `CERT-STRICT-VALID-60499890`，来源为 `LOCAL_IMPORT`。
   - 未匹配、未合格、空编号均被预览标记为无效，提交含错误文件返回 400。
@@ -388,9 +388,9 @@ Docker 验证：
 
 1. 启动 Docker 运行包：`cd /Users/lc.leixyz/Desktop/kaopingyunwei-main/app && EXAM_PORT=8080 docker compose --env-file .env -f docker/docker-compose.yml up -d backend frontend`。
 2. 在 Docker DB 中准备严格计划 `CERT-STRICT-1778360499890`：北京分部、2 名合格、1 名未成绩、1 名不合格，并为其中一名合格考生预置证书编号 `CERT-STRICT-EXIST-60499890`。
-3. 用 `bjadmin/bjadmin123` 登录 `http://localhost:8080/certificates`，选择严格计划，确认只显示两名合格考生。
+3. 用分支管理员账号登录 `http://localhost:8080/certificates`，选择严格计划，确认只显示两名合格考生。密码见受控配置。
 4. 分别导入有效、未匹配/未合格/空编号、文件内重复、同计划重复证书编号 `.xlsx`，记录预览和提交响应。
-5. 分支提交空白证书和证书壳申领；切 `hqadmin/hqadmin123` 审批和登记发出；再用分支确认入库。
+5. 分支提交空白证书和证书壳申领；切总部管理员账号审批和登记发出；再用分支确认入库。密码见受控配置。
 6. 用分支登记打印发放，先测试超 110% 无原因被拦截，再填写原因保存。
 7. 用分支提交作废记录；切总部创建并关闭销毁批次。
 8. 用分支提交遗失补办申请；切总部审核通过；用分支登记补办发放。
@@ -426,7 +426,7 @@ Docker 验证：
 - HTTP 抽测结果（本地后端 `PORT=3101 npm run backend:dev`）：
   - `GET /api/certificates/exports/certificate-import-template.xlsx`：HTTP 200，Excel 可解析，含 4 列导入模板。
   - `GET /api/certificates/exports/supply-request-template.pdf?...`：HTTP 200，`application/pdf`，文件头 `%PDF-`，大小约 29KB。
-  - 分支 `bjadmin/bjadmin123` 上传盖章 PDF 创建申领单 `2cdcc63a-7b92-4c9a-b5bf-5e872b450c5f`；总部 `hqadmin/hqadmin123` 审批、发出；分支确认入库均 HTTP 200/201。
+  - 分支管理员账号上传盖章 PDF 创建申领单 `2cdcc63a-7b92-4c9a-b5bf-5e872b450c5f`；总部管理员账号审批、发出；分支确认入库均 HTTP 200/201。密码见受控配置。
   - 入库后库存台账出现 `SUPPLY_RECEIVED`：空白证书 +2、证书壳 +1，责任人为“测试责任人”，可用结余和待销毁数量字段返回正常。
   - `GET /api/certificates/exports/ledger.xlsx`：HTTP 200，工作表“证书库存台账”，字段含机构、物品、流水类型、数量、可用结余、待销毁、责任人、操作人、关联对象、备注、时间。
   - `GET /api/certificates/exports/delivery.xlsx` 和 `/exports/stocktakes.xlsx`：HTTP 200；当前本地数据为空表时仍可生成可打开的 Excel。
@@ -450,9 +450,9 @@ Docker 验证：
   - 考生：2 名合格、1 名不合格；不合格考生直接维护证书编号返回 400。
   - 本轮脚本会额外留下若干 `CERT-BROWSER-*` 严格测试计划和库存流水，属于验证数据。
 - Chrome 页面验证：
-  - 分支管理员 `bjadmin/bjadmin123`：证书页可进入；计划工作台显示导入模板、文件选择、预览导入、提交回填、单行保存、完成证书管理节点；申领与库存页显示分支填写表单、生成 PDF、上传提交、库存余额、待销毁和低库存提醒。
-  - 总部管理员 `hqadmin/hqadmin123`：侧边栏没有“意向考生”；证书编号回填区没有上传/保存/提交/完成节点按钮；申领与库存页可看全量库存和台账，但分支申领填写表单隐藏，仅保留审批监管和 PDF/台账查看入口。
-  - 系统管理员 `admin/admin123`：侧边栏没有“意向考生”；通过接口确认 `/candidates` 响应不包含 `paymentStatus`，和总部一致。
+  - 分支管理员账号：证书页可进入；计划工作台显示导入模板、文件选择、预览导入、提交回填、单行保存、完成证书管理节点；申领与库存页显示分支填写表单、生成 PDF、上传提交、库存余额、待销毁和低库存提醒。密码见受控配置。
+  - 总部管理员账号：侧边栏没有“意向考生”；证书编号回填区没有上传/保存/提交/完成节点按钮；申领与库存页可看全量库存和台账，但分支申领填写表单隐藏，仅保留审批监管和 PDF/台账查看入口。密码见受控配置。
+  - 系统管理员账号：侧边栏没有“意向考生”；通过接口确认 `/candidates` 响应不包含 `paymentStatus`，和总部一致。密码见受控配置。
 - 严格 API 回归结果：
   - 导入模板 Excel 字段通过：姓名、证件号码、证书编号、证书版面发证日期。
   - 固定申领 PDF 通过：文件头 `%PDF-`，约 29KB。
@@ -505,7 +505,7 @@ Docker 验证：
   - 提交时上传签字盖章件，系统冻结总部上报数据表快照和表5汇总快照。
   - 表5 PDF 按真实样例固定版式生成，保留签字、单位盖章和日期区域；数据表 Excel 字段固定为 11 列：姓名、证件类型、证件号码、所在单位、职业名称、工种名称、职业技能等级、证书编号、发证日期、评价机构、发证机构。
 - 本轮测试数据：
-  - 分支账号：`bjadmin/bjadmin123`；总部账号：`hqadmin/hqadmin123`。
+  - 分支账号：`bjadmin`；总部账号：`hqadmin`；密码见受控配置。
   - 创建测试批次：`TESTARCHIVE2026051101`，批次 ID `8b77651c-5b08-46dd-9a52-94182cccd58c`。
   - 选择计划：`CERT-BROWSER-15125482`，完整证书记录 2 条。
   - 上传测试盖章件使用系统生成的 `/tmp/archive-table5.pdf`。
