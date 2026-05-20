@@ -4,10 +4,13 @@
 
 import { Router, type Response } from 'express';
 import PDFDocument from 'pdfkit';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { recordAudit } from '../utils/audit.js';
 import { error, success } from '../utils/response.js';
+import { logger } from '../utils/logger.js';
+import { parseBody } from '../utils/routeValidation.js';
 import { applyPdfFont, PdfFontMissingError, requireCertificatePrintFont, requireChinesePdfFont } from '../utils/pdfFonts.js';
 import {
   DEFAULT_PDF_TEMPLATES,
@@ -30,6 +33,11 @@ import {
 const router = Router();
 
 router.use(authenticate);
+
+const updatePdfTemplateSchema = z.object({
+  name: z.string().trim().max(100, '模板名称最多100字').optional(),
+  definition: z.unknown(),
+});
 
 router.get('/', async (_req, res) => {
   try {
@@ -67,8 +75,9 @@ router.put('/:key', requireRoles('SYS_ADMIN', 'HQ_ADMIN'), async (req, res) => {
     }
 
     const fallback = DEFAULT_PDF_TEMPLATES[key];
-    const definition = validatePdfTemplateDefinition(key, req.body?.definition);
-    const name = normalizeTemplateName(req.body?.name) || fallback.name;
+    const body = parseBody(updatePdfTemplateSchema, req.body);
+    const definition = validatePdfTemplateDefinition(key, body.definition);
+    const name = normalizeTemplateName(body.name) || fallback.name;
     const oldTemplate = await prisma.pdfTemplate.findUnique({ where: { key } });
     const template = await prisma.pdfTemplate.upsert({
       where: { key },
@@ -266,7 +275,7 @@ function handleRouteError(res: Response, err: unknown, fallbackMessage: string):
     error(res, err.code, err.message, err.statusCode);
     return;
   }
-  console.error(fallbackMessage, err);
+  logger.error({ err }, fallbackMessage);
   error(res, 'INTERNAL_ERROR', fallbackMessage, 500);
 }
 

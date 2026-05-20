@@ -19,6 +19,7 @@ describe('production config validation', () => {
     BACKUP_DIR: '/app/data/backups',
     LOG_DIR: '/app/data/logs',
     IS_DOCKER_RUNTIME: true,
+    CORS_ORIGIN: 'https://exam.example.com',
   };
 
   it('rejects production defaults and missing operational directories', () => {
@@ -55,6 +56,16 @@ describe('production config validation', () => {
         LOG_DIR: './logs',
       }),
       /Docker.*\/app\/data/s
+    );
+  });
+
+  it('rejects wildcard CORS in production', () => {
+    assert.throws(
+      () => validateProductionConfig({
+        ...secureProductionConfig,
+        CORS_ORIGIN: '*',
+      }),
+      /CORS_ORIGIN.*不能为 \*/s
     );
   });
 

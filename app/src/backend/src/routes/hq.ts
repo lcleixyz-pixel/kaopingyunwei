@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
-import { success, error } from '../utils/response.js';
+import { success } from '../utils/response.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { decrypt } from '../utils/crypto.js';
 import { recordAudit } from '../utils/audit.js';
 import {
@@ -107,8 +108,7 @@ router.get('/reports/registration-progress', async (req, res) => {
 
     success(res, rows);
   } catch (err) {
-    console.error('Get HQ registration progress report error:', err);
-    error(res, 'INTERNAL_ERROR', '获取总部报名资料进度报表失败', 500);
+    respondWithFriendlyError(res, err, '获取总部报名资料进度报表失败');
   }
 });
 

@@ -8,14 +8,17 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { error, success } from '../utils/response.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { hashPassword } from '../utils/crypto.js';
 import { recordAudit } from '../utils/audit.js';
+import { enforceUnpagedListLimit, paginationMeta, parseListPagination } from '../utils/listSafety.js';
 import {
   canAssignUserRole,
   canManageTargetUser,
   getAssignableUserRoles,
   isRoleCompatibleWithTenant,
 } from '../services/userManagementRules.js';
+import { validateManagedUserPassword } from '../services/userPasswordPolicy.js';
 
 const router = Router();
 
@@ -49,7 +52,7 @@ const createUserSchema = z.object({
   role: assignableUserRoleSchema,
   phone: optionalText,
   email: optionalEmail,
-  password: z.string().min(6).max(72),
+  password: z.string().min(1, '临时密码不能为空').max(72, '临时密码不能超过 72 位'),
   status: userStatusSchema.default('ACTIVE'),
 });
 
@@ -62,7 +65,7 @@ const updateUserSchema = z.object({
 });
 
 const resetPasswordSchema = z.object({
-  password: z.string().min(6).max(72),
+  password: z.string().min(1, '临时密码不能为空').max(72, '临时密码不能超过 72 位'),
 });
 
 type ManagedUser = Prisma.UserGetPayload<{
@@ -96,8 +99,7 @@ router.get('/options', async (req, res) => {
 
     success(res, { tenants, roles });
   } catch (err) {
-    console.error('Get user options error:', err);
-    error(res, 'INTERNAL_ERROR', '获取账号选项失败', 500);
+    respondWithFriendlyError(res, err, '获取账号选项失败');
   }
 });
 
@@ -105,7 +107,7 @@ router.get('/', async (req, res) => {
   try {
     const result = listUsersSchema.safeParse(req.query);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -133,16 +135,22 @@ router.get('/', async (req, res) => {
       ];
     }
 
+    const pagination = parseListPagination(req.query as Record<string, unknown>, {
+      overflowMessage: '账号数据较多，请输入筛选条件或分页查看',
+    });
     const users = await prisma.user.findMany({
       where,
       include: userInclude,
       orderBy: [{ tenantId: 'asc' }, { role: 'asc' }, { username: 'asc' }],
+      ...(pagination.skip !== undefined ? { skip: pagination.skip } : {}),
+      take: pagination.take,
     });
+    const visibleUsers = enforceUnpagedListLimit(users, pagination);
+    const total = pagination.isPaginated ? await prisma.user.count({ where }) : visibleUsers.length;
 
-    success(res, users.map(sanitizeUser));
+    success(res, visibleUsers.map(sanitizeUser), 200, paginationMeta(pagination, total));
   } catch (err) {
-    console.error('List users error:', err);
-    error(res, 'INTERNAL_ERROR', '获取账号列表失败', 500);
+    respondWithFriendlyError(res, err, '获取账号列表失败');
   }
 });
 
@@ -150,11 +158,16 @@ router.post('/', async (req, res) => {
   try {
     const result = createUserSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
     const data = result.data;
+    const passwordPolicy = validateManagedUserPassword({ username: data.username, password: data.password });
+    if (!passwordPolicy.valid) {
+      error(res, 'VALIDATION_ERROR', passwordPolicy.message || '临时密码不符合安全要求', 400);
+      return;
+    }
     if (!canAssignUserRole(req.userRole, data.role)) {
       error(res, 'FORBIDDEN', '无权创建该角色账号', 403);
       return;
@@ -200,8 +213,7 @@ router.post('/', async (req, res) => {
 
     success(res, safeUser, 201);
   } catch (err) {
-    console.error('Create user error:', err);
-    error(res, 'INTERNAL_ERROR', '创建账号失败', 500);
+    respondWithFriendlyError(res, err, '创建账号失败');
   }
 });
 
@@ -209,7 +221,7 @@ router.patch('/:id', async (req, res) => {
   try {
     const result = updateUserSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -268,8 +280,7 @@ router.patch('/:id', async (req, res) => {
 
     success(res, safeUser);
   } catch (err) {
-    console.error('Update user error:', err);
-    error(res, 'INTERNAL_ERROR', '保存账号失败', 500);
+    respondWithFriendlyError(res, err, '保存账号失败');
   }
 });
 
@@ -277,7 +288,7 @@ router.post('/:id/reset-password', async (req, res) => {
   try {
     const result = resetPasswordSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -296,6 +307,11 @@ router.post('/:id/reset-password', async (req, res) => {
       targetUserId: oldUser.id,
     })) {
       error(res, 'FORBIDDEN', '无权重置该账号密码', 403);
+      return;
+    }
+    const passwordPolicy = validateManagedUserPassword({ username: oldUser.username, password: result.data.password });
+    if (!passwordPolicy.valid) {
+      error(res, 'VALIDATION_ERROR', passwordPolicy.message || '临时密码不符合安全要求', 400);
       return;
     }
 
@@ -319,8 +335,7 @@ router.post('/:id/reset-password', async (req, res) => {
 
     success(res, sanitizeUser(user));
   } catch (err) {
-    console.error('Reset user password error:', err);
-    error(res, 'INTERNAL_ERROR', '重置密码失败', 500);
+    respondWithFriendlyError(res, err, '重置密码失败');
   }
 });
 

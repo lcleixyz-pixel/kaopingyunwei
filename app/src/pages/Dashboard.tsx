@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useExamStore } from '@/stores/examStore';
 import { useAuthStore } from '@/stores/authStore';
+import { PageAlert } from '@/components/common/PageAlert';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 import { NodeCard } from '@/components/exam/NodeCard';
 import { useApi } from '@/hooks/useApi';
 import type { DashboardStats, ExamNode, ActivityItem, ExamPlan } from '@/shared';
 import { formatDate } from '@/lib/dateUtils';
+import { getFriendlyErrorMessage } from '@/lib/apiError';
 import { deriveBranchWorkbenchTasks, getDisplayTenantName, getPlanStageSummary, isBranchRole, type WorkbenchTask, type WorkbenchTaskTone } from '@/lib/workbenchRules';
 import {
   ClipboardList, AlertTriangle,
@@ -54,8 +56,10 @@ export default function Dashboard() {
   const [publishedPlans, setPublishedPlans] = useState<ExamPlan[]>([]);
   const [reports, setReports] = useState<DashboardReports | null>(null);
   const [hqProgress, setHqProgress] = useState<HqRegistrationProgressRow[]>([]);
+  const [error, setError] = useState('');
 
   const fetchDashboard = useCallback(async () => {
+    setError('');
     try {
       const stats = await get<DashboardStats>('/dashboard');
       setDashboardStats(stats);
@@ -72,7 +76,7 @@ export default function Dashboard() {
         setHqProgress(await get<HqRegistrationProgressRow[]>('/hq/reports/registration-progress'));
       }
     } catch (err) {
-      console.error('Dashboard fetch error:', err);
+      setError(getFriendlyErrorMessage(err, '数据暂时加载失败，请刷新重试'));
     }
   }, [get, setDashboardStats, setNodes, userRole]);
 
@@ -117,6 +121,8 @@ export default function Dashboard() {
           <span>最后更新: {new Date().toLocaleTimeString('zh-CN')}</span>
         </div>
       </div>
+
+      {error && <PageAlert tone="error">{error}</PageAlert>}
 
       {branchMode && (
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">

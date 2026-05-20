@@ -1,20 +1,23 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { Building2, Eye, EyeOff, Loader2 } from 'lucide-react';
 
+import { PageAlert } from '@/components/common/PageAlert';
 import { useApi } from '@/hooks/useApi';
+import { getFriendlyErrorMessage } from '@/lib/apiError';
 import type { LoginResponse } from '@/shared';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { setAuth } = useAuthStore();
   const { post } = useApi();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState((location.state as { message?: string } | null)?.message || '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,8 +34,8 @@ export default function Login() {
       const data = await post<LoginResponse>('/auth/login', { username, password });
       setAuth(data.user, data.tenant, data.token);
       navigate('/');
-    } catch (err: any) {
-      setError(err?.message || '登录失败，请检查用户名和密码');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '登录失败，请检查用户名和密码'));
     } finally {
       setIsLoading(false);
     }
@@ -55,8 +58,8 @@ export default function Login() {
           <h2 className="text-lg font-bold text-slate-900 mb-6">欢迎登录</h2>
 
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
-              {error}
+            <div className="mb-4">
+              <PageAlert tone="error">{error}</PageAlert>
             </div>
           )}
 

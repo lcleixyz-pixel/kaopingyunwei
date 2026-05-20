@@ -15,6 +15,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { apiClient, useApi } from '@/hooks/useApi';
+import { PageAlert } from '@/components/common/PageAlert';
 import { useAuthStore } from '@/stores/authStore';
 import {
   formatTenantOfficialName,
@@ -27,6 +28,7 @@ import {
   type ExamPlan,
 } from '@/shared';
 import { formatDate, formatDateTime } from '@/lib/dateUtils';
+import { getFriendlyBlobErrorMessage, getFriendlyErrorMessage } from '@/lib/apiError';
 
 type ArchiveRecord = Omit<Archive, 'plan'> & {
   plan?: Pick<ExamPlan, 'id' | 'title' | 'examDate' | 'profession' | 'level'>;
@@ -95,8 +97,8 @@ export default function Archives() {
       setBatches(batchData);
       setArchives(archiveData);
       setLegacyPlans(planOptions);
-    } catch (err: any) {
-      setError(err?.message || '获取档案数据失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '获取档案数据失败'));
     } finally {
       setIsLoading(false);
     }
@@ -173,8 +175,8 @@ export default function Archives() {
       }
       resetForm();
       fetchData();
-    } catch (err: any) {
-      setError(err?.response?.data?.error?.message || err?.message || '保存证书上报批次失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '保存证书上报批次失败'));
     } finally {
       setIsSaving(false);
     }
@@ -196,8 +198,8 @@ export default function Archives() {
       });
       setSubmitFiles((current) => ({ ...current, [batchId]: undefined }));
       fetchData();
-    } catch (err: any) {
-      setError(err?.response?.data?.error?.message || err?.message || '提交总部失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '提交总部失败'));
     } finally {
       setIsSaving(false);
     }
@@ -213,8 +215,8 @@ export default function Archives() {
       });
       setReviewNotes((current) => ({ ...current, [batchId]: '' }));
       fetchData();
-    } catch (err: any) {
-      setError(err?.response?.data?.error?.message || err?.message || '总部审批失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '总部审批失败'));
     } finally {
       setIsSaving(false);
     }
@@ -228,8 +230,8 @@ export default function Archives() {
       await post<ArchiveRecord>('/archives', { planId: legacyPlanId });
       setLegacyPlanId('');
       fetchData();
-    } catch (err: any) {
-      setError(err?.message || '封存档案失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '封存档案失败'));
     } finally {
       setIsSaving(false);
     }
@@ -239,8 +241,8 @@ export default function Archives() {
     try {
       await patch<ArchiveRecord>(`/archives/${id}/status`, { status });
       fetchData();
-    } catch (err: any) {
-      setError(err?.message || '更新档案状态失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '更新档案状态失败'));
     }
   };
 
@@ -255,8 +257,8 @@ export default function Archives() {
       link.click();
       link.remove();
       URL.revokeObjectURL(blobUrl);
-    } catch (err: any) {
-      setError(err?.response?.data?.error?.message || err?.message || '下载失败');
+    } catch (err) {
+      setError(await getFriendlyBlobErrorMessage(err, '下载失败'));
     }
   };
 
@@ -284,7 +286,7 @@ export default function Archives() {
         </button>
       </div>
 
-      {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>}
+      {error && <PageAlert tone="error">{error}</PageAlert>}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <MetricCard label="待报备计划" value={readyPlanCount} tone="blue" />

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock, Loader2, Search } from 'lucide-react';
+import { PageAlert } from '@/components/common/PageAlert';
 import { useApi } from '@/hooks/useApi';
 import type { ExamNode, ExamPlan } from '@/shared';
 import { NodeCard } from '@/components/exam/NodeCard';
@@ -7,6 +8,7 @@ import { NODE_METADATA, NODE_ORDER } from '@/lib/constants';
 import { getNodeTrackingPlans } from '@/lib/nodeTrackingRules';
 import { canCompleteNodeFromTracking, getNodeTrackingPrimaryAction } from '@/lib/nodeTrackingActions';
 import { formatDate } from '@/lib/dateUtils';
+import { getFriendlyErrorMessage } from '@/lib/apiError';
 import { useAuthStore } from '@/stores/authStore';
 import { useNavigate } from 'react-router-dom';
 
@@ -28,8 +30,8 @@ export default function ExamNodes() {
     try {
       const data = await get<ExamPlan[]>('/exam-plans', { status: 'PUBLISHED' });
       setPlans(data);
-    } catch (err: any) {
-      setError(err?.message || '获取节点追踪列表失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '获取节点追踪列表失败'));
     } finally {
       setIsLoading(false);
     }
@@ -74,8 +76,8 @@ export default function ExamNodes() {
       setCompleteNode(null);
       setCompleteNotes('');
       fetchPlans();
-    } catch (err: any) {
-      setError(err?.message || '完成节点失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '完成节点失败'));
     } finally {
       setCompleting(false);
     }
@@ -95,9 +97,7 @@ export default function ExamNodes() {
         </div>
       </div>
 
-      {error && (
-        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
-      )}
+      {error && <PageAlert tone="error">{error}</PageAlert>}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <SummaryItem icon={<Clock className="w-4 h-4" />} label="进行中计划" value={trackingPlans.length} />

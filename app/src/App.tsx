@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { Layout } from '@/components/layout/Layout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { PageAlert } from '@/components/common/PageAlert';
 import { apiClient } from '@/hooks/useApi';
 import type { ApiResponse, Tenant, User } from '@/shared';
 import Login from '@/pages/Login';
@@ -27,11 +28,19 @@ function ProtectedRoute({ children, requiredRoles }: { children: React.ReactNode
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={{ message: '请先登录后再访问系统' }} />;
   }
 
   if (requiredRoles && !hasRole(requiredRoles)) {
-    return <Navigate to="/" replace />;
+    return (
+      <ErrorBoundary resetKey={`${location.pathname}${location.search}`}>
+        <div className="p-6">
+          <PageAlert tone="warning">
+            没有权限访问该页面。你可以回到左侧菜单选择当前账号可用的功能，如需开通权限请联系系统管理员。
+          </PageAlert>
+        </div>
+      </ErrorBoundary>
+    );
   }
 
   return <ErrorBoundary resetKey={`${location.pathname}${location.search}`}>{children}</ErrorBoundary>;

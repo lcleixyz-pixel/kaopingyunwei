@@ -12,11 +12,19 @@ import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
 import { recordAudit } from '../utils/audit.js';
 import { getOperationalSettings } from '../services/operationalSettings.js';
+import { downloadFileQuerySchema, logsQuerySchema, restoreBackupSchema } from '../services/aiOpsSchemas.js';
+import { createWriteRateLimitMiddleware } from '../services/writeRateLimit.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
 router.use(authenticate);
 router.use(requireRoles('SYS_ADMIN'));
+const aiOpsMutationRateLimit = createWriteRateLimitMiddleware({
+  routeKey: 'ai-ops-mutation',
+  message: 'AI 运维操作过于频繁，请稍后再试',
+});
 
 const execFileAsync = promisify(execFile);
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -87,15 +95,14 @@ router.get('/health', async (_req, res) => {
 
     success(res, health);
   } catch (err) {
-    console.error('Health check error:', err);
-    error(res, 'INTERNAL_ERROR', '健康检查失败', 500);
+    respondWithFriendlyError(res, err, '健康检查失败');
   }
 });
 
 /**
  * POST /api/ai-ops/backup — 执行备份
  */
-router.post('/backup', async (req, res) => {
+router.post('/backup', aiOpsMutationRateLimit, async (req, res) => {
   try {
     await ensureBackupDir();
 
@@ -128,8 +135,7 @@ router.post('/backup', async (req, res) => {
 
     success(res, payload);
   } catch (err) {
-    console.error('Backup error:', err);
-    error(res, 'INTERNAL_ERROR', '备份失败', 500);
+    respondWithFriendlyError(res, err, '备份失败');
   }
 });
 
@@ -159,24 +165,22 @@ router.get('/backups', async (_req, res) => {
 
     success(res, backups);
   } catch (err) {
-    console.error('Get backups error:', err);
-    error(res, 'INTERNAL_ERROR', '获取备份列表失败', 500);
+    respondWithFriendlyError(res, err, '获取备份列表失败');
   }
 });
 
 /**
  * POST /api/ai-ops/restore — 从备份恢复
  */
-router.post('/restore', async (req, res) => {
+router.post('/restore', aiOpsMutationRateLimit, async (req, res) => {
   try {
-    const { backupId } = req.body;
-
-    if (!backupId) {
-      error(res, 'VALIDATION_ERROR', '请指定备份文件', 400);
+    const result = restoreBackupSchema.safeParse(req.body);
+    if (!result.success) {
+      respondWithFriendlyError(res, result.error, '恢复失败');
       return;
     }
 
-    const safeBackupId = path.basename(backupId);
+    const safeBackupId = result.data.backupId;
     const backupPath = path.join(BACKUP_DIR, safeBackupId);
 
     // 验证备份文件存在
@@ -207,15 +211,14 @@ router.post('/restore', async (req, res) => {
       safeBackup: path.basename(safeBackupPath),
     });
   } catch (err) {
-    console.error('Restore error:', err);
-    error(res, 'INTERNAL_ERROR', '恢复失败', 500);
+    respondWithFriendlyError(res, err, '恢复失败');
   }
 });
 
 /**
  * POST /api/ai-ops/export — 导出数据（用于迁移）
  */
-router.post('/export', async (req, res) => {
+router.post('/export', aiOpsMutationRateLimit, async (req, res) => {
   try {
     await ensureBackupDir();
 
@@ -265,8 +268,7 @@ router.post('/export', async (req, res) => {
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     });
   } catch (err) {
-    console.error('Export error:', err);
-    error(res, 'INTERNAL_ERROR', '导出失败', 500);
+    respondWithFriendlyError(res, err, '导出失败');
   }
 });
 
@@ -275,12 +277,13 @@ router.post('/export', async (req, res) => {
  */
 router.get('/download', async (req, res) => {
   try {
-    const fileName = typeof req.query.file === 'string' ? path.basename(req.query.file) : '';
-    if (!fileName) {
-      error(res, 'VALIDATION_ERROR', '请指定下载文件', 400);
+    const result = downloadFileQuerySchema.safeParse(req.query);
+    if (!result.success) {
+      respondWithFriendlyError(res, result.error, '下载失败');
       return;
     }
 
+    const fileName = result.data.file;
     const filePath = path.join(BACKUP_DIR, fileName);
     try {
       await fs.access(filePath);
@@ -291,8 +294,7 @@ router.get('/download', async (req, res) => {
 
     res.download(filePath, fileName);
   } catch (err) {
-    console.error('Download error:', err);
-    error(res, 'INTERNAL_ERROR', '下载失败', 500);
+    respondWithFriendlyError(res, err, '下载失败');
   }
 });
 
@@ -301,13 +303,16 @@ router.get('/download', async (req, res) => {
  */
 router.get('/logs', async (req, res) => {
   try {
-    const { lines = '100' } = req.query;
-    const maxLines = parseInt(lines as string, 10);
+    const result = logsQuerySchema.safeParse(req.query);
+    if (!result.success) {
+      respondWithFriendlyError(res, result.error, '获取日志失败');
+      return;
+    }
     const tenantId = req.tenantId!;
 
     const logs = await prisma.auditLog.findMany({
       where: { tenantId },
-      take: maxLines,
+      take: result.data.lines,
       orderBy: { createdAt: 'desc' },
       include: {
         user: {
@@ -318,8 +323,7 @@ router.get('/logs', async (req, res) => {
 
     success(res, logs);
   } catch (err) {
-    console.error('Get logs error:', err);
-    error(res, 'INTERNAL_ERROR', '获取日志失败', 500);
+    respondWithFriendlyError(res, err, '获取日志失败');
   }
 });
 
@@ -336,11 +340,11 @@ async function cleanupOldBackups(): Promise<void> {
       const stat = await fs.stat(filePath);
       if (stat.ctime < cutoffDate) {
         await fs.unlink(filePath);
-        console.log(`Deleted old backup: ${file}`);
+        logger.info({ file }, '已删除过期备份');
       }
     }
   } catch (err) {
-    console.error('Cleanup backups error:', err);
+    logger.error({ err }, '清理过期备份失败');
   }
 }
 

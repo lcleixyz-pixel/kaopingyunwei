@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, CreditCard, Download, FileCheck2, Image as ImageIcon, Loader2, Pencil, Plus, Search, Trash2, Upload, Users, XCircle } from 'lucide-react';
 import { apiClient, useApi } from '@/hooks/useApi';
+import { PageAlert } from '@/components/common/PageAlert';
+import { useConfirmDialog } from '@/components/common/ConfirmDialog';
+import { PaginationBar } from '@/components/common/PaginationBar';
 import {
   ALL_MATERIALS,
   DEFAULT_MATERIALS,
@@ -20,6 +23,8 @@ import {
   type PaymentStatus,
 } from '@/shared';
 import { formatDate } from '@/lib/dateUtils';
+import { DEFAULT_PAGE_SIZE, SUMMARY_PAGE_SIZE, clampPageAfterMeta, withPaginationParams, type PaginationMeta, type PaginationState } from '@/lib/apiPagination';
+import { getFriendlyBlobErrorMessage, getFriendlyErrorMessage } from '@/lib/apiError';
 import { getCandidateManagementPlanOptions, shouldLoadCandidatesForPlan } from '@/lib/candidateManagementRules';
 import { summarizeCandidateRegistration } from '@/lib/workbenchRules';
 import { useAuthStore } from '@/stores/authStore';
@@ -101,11 +106,14 @@ const emptyForm: ProfileForm = {
 };
 
 export default function Candidates() {
-  const { get, post } = useApi();
+  const { get, getWithMeta, post } = useApi();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuthStore();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [plans, setPlans] = useState<ExamPlan[]>([]);
   const [uploadBatches, setUploadBatches] = useState<LocalUploadBatch[]>([]);
+  const [pagination, setPagination] = useState<PaginationState>({ page: 1, pageSize: DEFAULT_PAGE_SIZE });
+  const [paginationMeta, setPaginationMeta] = useState<PaginationMeta>();
   const [isLoading, setIsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -159,6 +167,7 @@ export default function Candidates() {
   const fetchCandidates = useCallback(async () => {
     if (!shouldLoadCandidatesForPlan(selectedPlanId)) {
       setCandidates([]);
+      setPaginationMeta(undefined);
       setIsLoading(false);
       return;
     }
@@ -166,21 +175,27 @@ export default function Candidates() {
     setIsLoading(true);
     setError('');
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, unknown> = {};
       if (searchQuery) params.search = searchQuery;
       params.planId = selectedPlanId;
-      const data = await get<Candidate[]>('/candidates', params);
+      const { data, meta } = await getWithMeta<Candidate[]>('/candidates', withPaginationParams(params, pagination));
+      const nextPaginationMeta = meta?.pagination;
       setCandidates(data);
+      setPaginationMeta(nextPaginationMeta);
+      const safePage = clampPageAfterMeta(pagination.page, nextPaginationMeta);
+      if (safePage !== pagination.page) {
+        setPagination((current) => ({ ...current, page: safePage }));
+      }
     } catch (err) {
-      setError(getErrorMessage(err, '获取考生列表失败'));
+      setError(getFriendlyErrorMessage(err, '获取考生列表失败'));
     } finally {
       setIsLoading(false);
     }
-  }, [get, searchQuery, selectedPlanId]);
+  }, [getWithMeta, pagination, searchQuery, selectedPlanId]);
 
   const fetchPlans = useCallback(async () => {
     try {
-      setPlans(await get<ExamPlan[]>('/exam-plans', { status: 'PUBLISHED' }));
+      setPlans(await get<ExamPlan[]>('/exam-plans', { status: 'PUBLISHED', page: 1, pageSize: SUMMARY_PAGE_SIZE }));
     } catch {
       setPlans([]);
     }
@@ -265,7 +280,7 @@ export default function Candidates() {
       });
       setShowProfile(true);
     } catch (err) {
-      setError(getErrorMessage(err, '获取报名资料失败'));
+      setError(getFriendlyErrorMessage(err, '获取报名资料失败'));
     }
   };
 
@@ -296,11 +311,14 @@ export default function Candidates() {
   };
 
   const handleSaveProfile = async () => {
-    if (
-      editingCandidate?.status === 'APPROVED'
-      && !window.confirm('该考生资料已审核通过。保存前请确认本地业务系统中的信息已同步保持一致，是否继续保存？')
-    ) {
-      return;
+    if (editingCandidate?.status === 'APPROVED') {
+      const ok = await confirm({
+        title: '保存已审核资料',
+        description: '该考生资料已审核通过。保存前请确认本地业务系统中的信息已同步保持一致，是否继续保存？',
+        confirmText: '确认保存',
+        tone: 'warning',
+      });
+      if (!ok) return;
     }
 
     setSaving(true);
@@ -319,7 +337,7 @@ export default function Candidates() {
       setEditingCandidate(null);
       await fetchCandidates();
     } catch (err) {
-      setError(getErrorMessage(err, '保存报名资料失败'));
+      setError(getFriendlyErrorMessage(err, '保存报名资料失败'));
     } finally {
       setSaving(false);
     }
@@ -346,7 +364,7 @@ export default function Candidates() {
       setForm((current) => ({ ...current, materials: { ...current.materials, photo: true } }));
       setPhotoVersion((value) => value + 1);
     } catch (err) {
-      setError(getErrorMessage(err, '上传证件照失败'));
+      setError(getFriendlyErrorMessage(err, '上传证件照失败'));
     } finally {
       setPhotoUploading(false);
     }
@@ -354,7 +372,13 @@ export default function Candidates() {
 
   const handleDeletePhoto = async () => {
     if (!editingCandidate) return;
-    if (!window.confirm(`确认删除「${editingCandidate.name}」的证件照？`)) return;
+    const ok = await confirm({
+      title: '删除证件照',
+      description: `确认删除「${editingCandidate.name}」的证件照？删除后需要重新上传才能通过材料检查。`,
+      confirmText: '确认删除',
+      tone: 'danger',
+    });
+    if (!ok) return;
 
     setPhotoUploading(true);
     setError('');
@@ -366,7 +390,7 @@ export default function Candidates() {
       setForm((current) => ({ ...current, materials: { ...current.materials, photo: false } }));
       setPhotoVersion((value) => value + 1);
     } catch (err) {
-      setError(getErrorMessage(err, '删除证件照失败'));
+      setError(getFriendlyErrorMessage(err, '删除证件照失败'));
     } finally {
       setPhotoUploading(false);
     }
@@ -374,9 +398,14 @@ export default function Candidates() {
 
   const handleApprove = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     const candidate = candidates.find((item) => item.id === id);
-    const ok = window.confirm(status === 'APPROVED'
-      ? `确认通过「${candidate?.name || '该考生'}」的报名资料审核？通过后会进入可导出候选，后续修改需同步地方系统。`
-      : `确认驳回「${candidate?.name || '该考生'}」？驳回会移除正式考生记录，并恢复或生成意向考生跟进记录。`);
+    const ok = await confirm({
+      title: status === 'APPROVED' ? '通过报名审核' : '驳回报名审核',
+      description: status === 'APPROVED'
+        ? `确认通过「${candidate?.name || '该考生'}」的报名资料审核？通过后会进入可导出候选，后续修改需同步地方系统。`
+        : `确认驳回「${candidate?.name || '该考生'}」？驳回会移除正式考生记录，并恢复或生成意向考生跟进记录。`,
+      confirmText: status === 'APPROVED' ? '确认通过' : '确认驳回',
+      tone: status === 'APPROVED' ? 'warning' : 'danger',
+    });
     if (!ok) return;
 
     setError('');
@@ -384,7 +413,7 @@ export default function Candidates() {
       await post(`/candidates/${id}/approve`, { status });
       await fetchCandidates();
     } catch (err) {
-      setError(getErrorMessage(err, '审核失败'));
+      setError(getFriendlyErrorMessage(err, '审核失败'));
     }
   };
 
@@ -410,7 +439,7 @@ export default function Candidates() {
       link.remove();
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      setError(await getBlobErrorMessage(err, '导出失败'));
+      setError(await getFriendlyBlobErrorMessage(err, '导出失败'));
     } finally {
       setExporting(false);
     }
@@ -444,7 +473,7 @@ export default function Candidates() {
       await fetchPlans();
       await fetchCandidates();
     } catch (err) {
-      setError(getErrorMessage(err, '保存上传回填失败'));
+      setError(getFriendlyErrorMessage(err, '保存上传回填失败'));
     } finally {
       setUploadSaving(false);
     }
@@ -453,9 +482,27 @@ export default function Candidates() {
   const inputClass = 'w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm';
   const fieldGroups = chunk(templateHeaders.filter((header) => header !== '序号'), 3);
   const latestUpload = uploadBatches[0];
+  const resetToFirstPage = () => {
+    setPagination((current) => current.page === 1 ? current : { ...current, page: 1 });
+  };
+
+  const handleSearchQueryChange = (value: string) => {
+    setSearchQuery(value);
+    resetToFirstPage();
+  };
+
+  const handleSelectedPlanChange = (planId: string) => {
+    setSelectedPlanId(planId);
+    resetToFirstPage();
+  };
+
+  const handlePageChange = (page: number) => {
+    setPagination((current) => ({ ...current, page }));
+  };
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -497,16 +544,14 @@ export default function Candidates() {
         </div>
       </div>
 
-      {error && (
-        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
-      )}
+      {error && <PageAlert tone="error">{error}</PageAlert>}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto]">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <select
               value={selectedPlanId}
-              onChange={(event) => setSelectedPlanId(event.target.value)}
+              onChange={(event) => handleSelectedPlanChange(event.target.value)}
               className="w-full min-w-0 rounded-lg border border-slate-300 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 sm:w-auto sm:min-w-72"
             >
               <option value="">请选择已发布考评计划</option>
@@ -522,7 +567,7 @@ export default function Candidates() {
                 type="text"
                 placeholder="搜索姓名..."
                 value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
+                onChange={(event) => handleSearchQueryChange(event.target.value)}
                 className="w-full rounded-lg border border-slate-300 py-2 pl-10 pr-4 outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -649,6 +694,13 @@ export default function Candidates() {
             <p>{emptyStateText}</p>
           </div>
         )}
+        <PaginationBar
+          pagination={pagination}
+          meta={paginationMeta}
+          visibleCount={candidates.length}
+          isLoading={isLoading}
+          onPageChange={handlePageChange}
+        />
       </div>
 
       {showProfile && (
@@ -1133,32 +1185,4 @@ function chunk<T>(items: T[], size: number): T[][] {
     groups.push(items.slice(index, index + size));
   }
   return groups;
-}
-
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (typeof err === 'object' && err && 'response' in err) {
-    const response = (err as { response?: { data?: { error?: { message?: string; details?: string } } } }).response;
-    const message = response?.data?.error?.message;
-    const details = response?.data?.error?.details;
-    return details ? `${message || fallback}：${details}` : message || fallback;
-  }
-  return err instanceof Error ? err.message : fallback;
-}
-
-async function getBlobErrorMessage(err: unknown, fallback: string): Promise<string> {
-  if (typeof err === 'object' && err && 'response' in err) {
-    const response = (err as { response?: { data?: Blob } }).response;
-    if (response?.data instanceof Blob) {
-      const text = await response.data.text();
-      try {
-        const payload = JSON.parse(text);
-        return payload?.error?.details
-          ? `${payload?.error?.message || fallback}：${payload.error.details}`
-          : payload?.error?.message || fallback;
-      } catch {
-        return text || fallback;
-      }
-    }
-  }
-  return getErrorMessage(err, fallback);
 }

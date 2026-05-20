@@ -1,8 +1,12 @@
 import { KeyRound, Loader2, Pencil, Plus, Search } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { PageAlert } from '@/components/common/PageAlert';
+import { PaginationBar } from '@/components/common/PaginationBar';
 import { useApi } from '@/hooks/useApi';
 import { ROLE_LABELS } from '@/lib/constants';
+import { DEFAULT_PAGE_SIZE, clampPageAfterMeta, withPaginationParams, type PaginationMeta, type PaginationState } from '@/lib/apiPagination';
+import { getFriendlyErrorMessage } from '@/lib/apiError';
 import type { CreateUserInput, Tenant, UpdateUserInput, User, UserManagementOptions, UserRole, UserStatus } from '@/shared';
 
 const STATUS_LABELS: Record<UserStatus, string> = {
@@ -43,26 +47,35 @@ interface Filters {
 const initialFilters: Filters = { keyword: '', tenantId: '', role: '', status: '' };
 
 export function UserManagementPanel() {
-  const { get, post, patch } = useApi();
+  const { get, getWithMeta, post, patch } = useApi();
   const [users, setUsers] = useState<User[]>([]);
   const [options, setOptions] = useState<UserManagementOptions>({ tenants: [], roles: [] });
   const [filters, setFilters] = useState<Filters>(initialFilters);
+  const [pagination, setPagination] = useState<PaginationState>({ page: 1, pageSize: DEFAULT_PAGE_SIZE });
+  const [paginationMeta, setPaginationMeta] = useState<PaginationMeta>();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error'>('success');
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [resetUser, setResetUser] = useState<User | null>(null);
   const [form, setForm] = useState<AccountForm>(initialForm);
   const [resetPassword, setResetPassword] = useState('');
 
-  const loadUsers = useCallback(async (nextFilters: Filters) => {
+  const loadUsers = useCallback(async (nextFilters: Filters, nextPagination: PaginationState) => {
     const params = Object.fromEntries(
       Object.entries(nextFilters).filter(([, value]) => value.trim() !== '')
     );
-    const data = await get<User[]>('/users', params);
+    const { data, meta } = await getWithMeta<User[]>('/users', withPaginationParams(params, nextPagination));
+    const nextPaginationMeta = meta?.pagination;
     setUsers(data);
-  }, [get]);
+    setPaginationMeta(nextPaginationMeta);
+    const safePage = clampPageAfterMeta(nextPagination.page, nextPaginationMeta);
+    if (safePage !== nextPagination.page) {
+      setPagination((current) => ({ ...current, page: safePage }));
+    }
+  }, [getWithMeta]);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,9 +92,12 @@ export function UserManagementPanel() {
           role: defaultRole,
           tenantId: defaultTenant?.id || '',
         }));
-        await loadUsers(initialFilters);
-      } catch (err: any) {
-        if (!cancelled) setMessage(err?.message || '加载账号失败');
+        await loadUsers(initialFilters, { page: 1, pageSize: DEFAULT_PAGE_SIZE });
+      } catch (err) {
+        if (!cancelled) {
+          setMessageType('error');
+          setMessage(getFriendlyErrorMessage(err, '加载账号失败'));
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -100,10 +116,27 @@ export function UserManagementPanel() {
 
   const setFilter = (key: keyof Filters, value: string) => {
     const nextFilters = { ...filters, [key]: value };
+    const nextPagination = { ...pagination, page: 1 };
     setFilters(nextFilters);
+    setPagination(nextPagination);
     setIsLoading(true);
-    loadUsers(nextFilters)
-      .catch((err: any) => setMessage(err?.message || '筛选账号失败'))
+    loadUsers(nextFilters, nextPagination)
+      .catch((err) => {
+        setMessageType('error');
+        setMessage(getFriendlyErrorMessage(err, '筛选账号失败'));
+      })
+      .finally(() => setIsLoading(false));
+  };
+
+  const handlePageChange = (page: number) => {
+    const nextPagination = { ...pagination, page };
+    setPagination(nextPagination);
+    setIsLoading(true);
+    loadUsers(filters, nextPagination)
+      .catch((err) => {
+        setMessageType('error');
+        setMessage(getFriendlyErrorMessage(err, '加载账号失败'));
+      })
       .finally(() => setIsLoading(false));
   };
 
@@ -165,6 +198,7 @@ export function UserManagementPanel() {
           status: form.status,
         };
         await patch<User>(`/users/${editingUser.id}`, payload);
+        setMessageType('success');
         setMessage('账号已保存');
       } else {
         const payload: CreateUserInput = {
@@ -178,12 +212,14 @@ export function UserManagementPanel() {
           status: form.status,
         };
         await post<User>('/users', payload);
+        setMessageType('success');
         setMessage('账号已创建');
       }
-      await loadUsers(filters);
+      await loadUsers(filters, pagination);
       closeForm();
-    } catch (err: any) {
-      setMessage(err?.message || '保存账号失败');
+    } catch (err) {
+      setMessageType('error');
+      setMessage(getFriendlyErrorMessage(err, '保存账号失败'));
     } finally {
       setIsSaving(false);
     }
@@ -201,12 +237,14 @@ export function UserManagementPanel() {
     setMessage('');
     try {
       await post<User>(`/users/${resetUser.id}/reset-password`, { password: resetPassword });
+      setMessageType('success');
       setMessage('密码已重置');
       setResetUser(null);
       setResetPassword('');
-      await loadUsers(filters);
-    } catch (err: any) {
-      setMessage(err?.message || '重置密码失败');
+      await loadUsers(filters, pagination);
+    } catch (err) {
+      setMessageType('error');
+      setMessage(getFriendlyErrorMessage(err, '重置密码失败'));
     } finally {
       setIsSaving(false);
     }
@@ -218,10 +256,12 @@ export function UserManagementPanel() {
     setMessage('');
     try {
       await patch<User>(`/users/${user.id}`, { status: nextStatus });
+      setMessageType('success');
       setMessage(nextStatus === 'ACTIVE' ? '账号已启用' : '账号已停用');
-      await loadUsers(filters);
-    } catch (err: any) {
-      setMessage(err?.message || '状态更新失败');
+      await loadUsers(filters, pagination);
+    } catch (err) {
+      setMessageType('error');
+      setMessage(getFriendlyErrorMessage(err, '状态更新失败'));
     } finally {
       setIsSaving(false);
     }
@@ -245,9 +285,7 @@ export function UserManagementPanel() {
       </div>
 
       {message && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700">
-          {message}
-        </div>
+        <PageAlert tone={messageType}>{message}</PageAlert>
       )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
@@ -340,6 +378,13 @@ export function UserManagementPanel() {
             ))}
           </tbody>
         </table>
+        <PaginationBar
+          pagination={pagination}
+          meta={paginationMeta}
+          visibleCount={users.length}
+          isLoading={isLoading}
+          onPageChange={handlePageChange}
+        />
       </div>
 
       {isFormOpen && (
@@ -416,7 +461,13 @@ function AccountDialog({
           </Field>
           {!isEditing && (
             <Field label="临时密码">
-              <input type="password" className={inputClass} value={form.password} onChange={(event) => onChange('password', event.target.value)} />
+              <input
+                type="password"
+                className={inputClass}
+                value={form.password}
+                onChange={(event) => onChange('password', event.target.value)}
+                placeholder="至少12位，含大小写、数字和特殊字符"
+              />
             </Field>
           )}
           <Field label="状态">
@@ -467,7 +518,13 @@ function ResetPasswordDialog({
         <p className="mt-1 text-sm text-slate-500">为 {user.realName} 设置临时密码，并线下告知本人。</p>
         <div className="mt-5">
           <Field label="新临时密码">
-            <input type="password" className={inputClass} value={password} onChange={(event) => onChange(event.target.value)} />
+            <input
+              type="password"
+              className={inputClass}
+              value={password}
+              onChange={(event) => onChange(event.target.value)}
+              placeholder="至少12位，含大小写、数字和特殊字符"
+            />
           </Field>
         </div>
         <div className="mt-6 flex justify-end gap-3">

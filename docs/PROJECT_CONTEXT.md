@@ -22,15 +22,14 @@
   - `npm run lint`
   - `npx prisma migrate status --schema src/backend/prisma/schema.prisma`
 
-## 默认账号
+## 初始化账号
 
-| 角色 | 用户名 | 密码 | 用途 |
+| 角色 | 用户名 | 密码来源 | 用途 |
 | --- | --- | --- | --- |
-| 系统管理员 | `admin` | `admin123` | 全局初始化、系统配置、AI 运维 |
-| 总部管理员 | `hqadmin` | `hqadmin123` | 总部监管、跨机构统计和审批 |
-| 分部管理员 | `bjadmin` | `bjadmin123` | 分支计划、考生和节点管理 |
-| 分部工作人员 | `bjstaff` | `bjstaff123` | 分支日常考务、意向考生和资料维护 |
-| 上海分部管理员 | `shadmin` | `shadmin123` | 多租户隔离验证 |
+| 系统管理员 | `admin` | `SEED_USER_PASSWORDS_JSON` 或受控密码管理器 | 全局初始化、系统配置、AI 运维 |
+| 总部管理员 | `hqadmin` | `SEED_USER_PASSWORDS_JSON` 或受控密码管理器 | 总部监管、跨机构统计和审批 |
+| 分部管理员 | `bjadmin` | `SEED_USER_PASSWORDS_JSON` 或受控密码管理器 | 分支计划、考生和节点管理 |
+| 分部工作人员 | `bjstaff` | `SEED_USER_PASSWORDS_JSON` 或受控密码管理器 | 分支日常考务、意向考生和资料维护 |
 
 ## 核心业务闭环
 

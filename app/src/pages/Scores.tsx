@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { AlertTriangle, Award, CheckCircle2, FileSpreadsheet, Loader2, RefreshCw, Save, ShieldCheck, Upload } from 'lucide-react';
+import { PageAlert } from '@/components/common/PageAlert';
+import { useConfirmDialog } from '@/components/common/ConfirmDialog';
 import { useApi } from '@/hooks/useApi';
 import {
   normalizeLevelLabel,
@@ -11,6 +13,7 @@ import {
 } from '@/shared';
 import { formatDate } from '@/lib/dateUtils';
 import { getRequiredSubjectSummary, normalizeScorePlanDetail, type ScorePlanDetail } from '@/lib/scorePageRules';
+import { getFriendlyErrorMessage } from '@/lib/apiError';
 import { useAuthStore } from '@/stores/authStore';
 
 interface ScoreDraft {
@@ -39,6 +42,7 @@ const inputClass = 'w-full px-3 py-2 rounded-lg border border-slate-300 focus:ri
 
 export default function Scores() {
   const { get, post } = useApi();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuthStore();
   const [plans, setPlans] = useState<ScorePlanOption[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState('');
@@ -65,8 +69,8 @@ export default function Scores() {
       const data = await get<ScorePlanOption[]>('/scores/plans');
       setPlans(data);
       setSelectedPlanId((current) => current || data[0]?.id || '');
-    } catch (err: any) {
-      setError(err?.message || '获取成绩检录计划失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '获取成绩检录计划失败'));
     } finally {
       setIsLoadingPlans(false);
     }
@@ -88,8 +92,8 @@ export default function Scores() {
       setPreview(null);
       setImportRows([]);
       setImportFileName('');
-    } catch (err: any) {
-      setError(err?.message || '获取计划成绩失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '获取计划成绩失败'));
     } finally {
       setIsLoadingDetail(false);
     }
@@ -118,8 +122,8 @@ export default function Scores() {
       });
       setNotice('成绩已保存，系统已按规则自动判定合格状态，请核对。');
       await fetchDetail(selectedPlanId);
-    } catch (err: any) {
-      setError(err?.message || '保存成绩失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '保存成绩失败'));
     } finally {
       setIsSaving(false);
     }
@@ -140,8 +144,8 @@ export default function Scores() {
       setImportFileName(file.name);
       setImportRows(rows);
       setPreview(data);
-    } catch (err: any) {
-      setError(err?.message || '预览成绩表失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '预览成绩表失败'));
     } finally {
       setIsImporting(false);
     }
@@ -163,15 +167,22 @@ export default function Scores() {
       setImportRows([]);
       setImportFileName('');
       await fetchDetail(selectedPlanId);
-    } catch (err: any) {
-      setError(err?.message || '确认导入失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '确认导入失败'));
     } finally {
       setIsImporting(false);
     }
   };
 
   const completeScoreRecord = async () => {
-    if (!selectedPlanId || !window.confirm('确认该计划全部考生成绩已核对无误，并结束成绩检录阶段？完成后会推进计划节点，后续如需调整需重新核对留痕。')) return;
+    if (!selectedPlanId) return;
+    const ok = await confirm({
+      title: '完成成绩检录',
+      description: '确认该计划全部考生成绩已核对无误，并结束成绩检录阶段？完成后会推进计划节点，后续如需调整需重新核对留痕。',
+      confirmText: '确认完成',
+      tone: 'warning',
+    });
+    if (!ok) return;
     setIsCompleting(true);
     setError('');
     setNotice('');
@@ -180,8 +191,8 @@ export default function Scores() {
       setNotice('成绩检录节点已完成，计划已进入下一节点。');
       await fetchPlans();
       await fetchDetail(selectedPlanId);
-    } catch (err: any) {
-      setError(err?.message || '完成成绩检录失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '完成成绩检录失败'));
     } finally {
       setIsCompleting(false);
     }
@@ -189,6 +200,7 @@ export default function Scores() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -203,8 +215,8 @@ export default function Scores() {
         </button>
       </div>
 
-      {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>}
-      {notice && <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm">{notice}</div>}
+      {error && <PageAlert tone="error">{error}</PageAlert>}
+      {notice && <PageAlert tone="success">{notice}</PageAlert>}
 
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <label className="block text-sm font-medium text-slate-700 mb-2">选择成绩检录计划</label>

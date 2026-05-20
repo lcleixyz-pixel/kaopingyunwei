@@ -29,15 +29,25 @@ import {
 import { CandidatePhotoError, processCandidatePhoto } from '../services/candidatePhotos.js';
 import { canAddCandidateToPlan, isRegistrationClosed, normalizeLevelLabel } from '../services/phase1Rules.js';
 import { getRejectedCandidateDisposition } from '../services/prospectiveCandidates.js';
+import { createUploadFileFilter, uploadProfiles } from '../utils/uploadValidation.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
+import { logger } from '../utils/logger.js';
+import { enforceUnpagedListLimit, paginationMeta, parseListPagination } from '../utils/listSafety.js';
+import { createWriteRateLimitMiddleware } from '../services/writeRateLimit.js';
 
 const router = Router();
 
 router.use(authenticate);
+const candidatePhotoRateLimit = createWriteRateLimitMiddleware({
+  routeKey: 'candidate-photo-upload',
+  message: '考生照片上传过于频繁，请稍后再试',
+});
 
 const PRIVATE_DATA_DIR = path.resolve(process.cwd(), 'data', 'private');
 const photoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: createUploadFileFilter(uploadProfiles.photo, '考生照片'),
 });
 
 const candidateSchema = z.object({
@@ -58,6 +68,10 @@ const registrationProfileSchema = z.object({
   registrationFields: z.record(z.string(), z.unknown()).optional(),
   materials: z.record(z.string(), z.boolean()).optional(),
   paymentStatus: z.enum(['UNPAID', 'PAID', '未缴', '已缴']).optional(),
+});
+
+const approveCandidateSchema = z.object({
+  status: z.enum(['APPROVED', 'REJECTED']),
 });
 
 /**
@@ -83,9 +97,14 @@ router.get('/', async (req, res) => {
       where.name = { contains: search as string };
     }
 
+    const pagination = parseListPagination(req.query as Record<string, unknown>, {
+      overflowMessage: '考生数据较多，请选择计划、输入搜索条件或分页查看',
+    });
     const candidates = await prisma.candidate.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      ...(pagination.skip !== undefined ? { skip: pagination.skip } : {}),
+      take: pagination.take,
       include: {
         plan: {
           include: {
@@ -100,11 +119,13 @@ router.get('/', async (req, res) => {
         registrationProfile: true,
       },
     });
+    const visibleCandidates = enforceUnpagedListLimit(candidates, pagination);
+    const total = pagination.isPaginated ? await prisma.candidate.count({ where }) : visibleCandidates.length;
 
     const canViewSensitive = canReadAcrossTenants(req.userRole)
       || req.userRole === 'BRANCH_ADMIN'
       || req.userRole === 'BRANCH_STAFF';
-    const sanitizedCandidates = candidates.map((c: any) => {
+    const sanitizedCandidates = visibleCandidates.map((c: any) => {
       const idCard = decrypt(c.idCard);
       return {
         ...c,
@@ -127,10 +148,9 @@ router.get('/', async (req, res) => {
       });
     }
 
-    success(res, sanitizedCandidates);
+    success(res, sanitizedCandidates, 200, paginationMeta(pagination, total));
   } catch (err) {
-    console.error('Get candidates error:', err);
-    error(res, 'INTERNAL_ERROR', '获取考生列表失败', 500);
+    respondWithFriendlyError(res, err, '获取考生列表失败');
   }
 });
 
@@ -143,7 +163,7 @@ router.post('/', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF', 'SYS_ADMIN'), asyn
     const result = candidateSchema.safeParse(req.body);
 
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -245,8 +265,7 @@ router.post('/', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF', 'SYS_ADMIN'), asyn
       }, req.userRole),
     }, 201);
   } catch (err) {
-    console.error('Create candidate error:', err);
-    error(res, 'INTERNAL_ERROR', '添加考生失败', 500);
+    respondWithFriendlyError(res, err, '添加考生失败');
   }
 });
 
@@ -302,8 +321,7 @@ router.get('/export', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
     res.send(workbook);
   } catch (err) {
-    console.error('Export candidates error:', err);
-    error(res, 'INTERNAL_ERROR', '导出考生报名表失败', 500);
+    respondWithFriendlyError(res, err, '导出考生报名表失败');
   }
 });
 
@@ -370,7 +388,7 @@ router.get('/export-package', async (req, res) => {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
     zip.outputStream.on('error', (err) => {
-      console.error('Export candidate ZIP stream error:', err);
+      logger.error({ err }, '导出考生资料包流失败');
       if (!res.headersSent) {
         error(res, 'INTERNAL_ERROR', '导出考生资料包失败', 500);
       } else {
@@ -380,8 +398,7 @@ router.get('/export-package', async (req, res) => {
     zip.outputStream.pipe(res);
     zip.end();
   } catch (err) {
-    console.error('Export candidate package error:', err);
-    error(res, 'INTERNAL_ERROR', '导出考生资料包失败', 500);
+    respondWithFriendlyError(res, err, '导出考生资料包失败');
   }
 });
 
@@ -403,15 +420,14 @@ router.get('/:id/photo', async (req, res) => {
     res.setHeader('Content-Type', 'image/jpeg');
     res.sendFile(resolvePrivatePath(candidate.photo));
   } catch (err) {
-    console.error('Get candidate photo error:', err);
-    error(res, 'INTERNAL_ERROR', '获取证件照失败', 500);
+    respondWithFriendlyError(res, err, '获取证件照失败');
   }
 });
 
 /**
  * POST /api/candidates/:id/photo — 上传或替换指定考生一寸证件照
  */
-router.post('/:id/photo', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), photoUpload.single('photo'), async (req, res) => {
+router.post('/:id/photo', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAFF'), candidatePhotoRateLimit, photoUpload.single('photo'), async (req, res) => {
   try {
     if (!req.file) {
       error(res, 'VALIDATION_ERROR', '请选择要上传的证件照', 400);
@@ -468,8 +484,7 @@ router.post('/:id/photo', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_STAF
       error(res, err.code, err.message, err.statusCode);
       return;
     }
-    console.error('Upload candidate photo error:', err);
-    error(res, 'INTERNAL_ERROR', '上传证件照失败', 500);
+    respondWithFriendlyError(res, err, '上传证件照失败');
   }
 });
 
@@ -512,8 +527,7 @@ router.delete('/:id/photo', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN', 'BRANCH_ST
 
     success(res, sanitizeCandidateForResponse(updated, req.userRole));
   } catch (err) {
-    console.error('Delete candidate photo error:', err);
-    error(res, 'INTERNAL_ERROR', '删除证件照失败', 500);
+    respondWithFriendlyError(res, err, '删除证件照失败');
   }
 });
 
@@ -541,8 +555,7 @@ router.get('/:id/registration-profile', async (req, res) => {
       idCard: decrypt(candidate.idCard),
     }, req.userRole));
   } catch (err) {
-    console.error('Get registration profile error:', err);
-    error(res, 'INTERNAL_ERROR', '获取报名资料失败', 500);
+    respondWithFriendlyError(res, err, '获取报名资料失败');
   }
 });
 
@@ -556,7 +569,7 @@ router.put('/:id/registration-profile', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'
     const result = registrationProfileSchema.safeParse(req.body);
 
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -621,8 +634,7 @@ router.put('/:id/registration-profile', requireRoles('SYS_ADMIN', 'BRANCH_ADMIN'
       registrationProfile: profile,
     }, req.userRole));
   } catch (err) {
-    console.error('Save registration profile error:', err);
-    error(res, 'INTERNAL_ERROR', '保存报名资料失败', 500);
+    respondWithFriendlyError(res, err, '保存报名资料失败');
   }
 });
 
@@ -633,12 +645,12 @@ router.post('/:id/approve', requireRoles('BRANCH_ADMIN'), async (req, res) => {
   try {
     const id = String(req.params.id);
     const tenantId = req.tenantId!;
-    const { status } = req.body;
-
-    if (!['APPROVED', 'REJECTED'].includes(status)) {
-      error(res, 'VALIDATION_ERROR', '审核状态无效', 400);
+    const result = approveCandidateSchema.safeParse(req.body);
+    if (!result.success) {
+      respondWithFriendlyError(res, result.error, '审核状态无效');
       return;
     }
+    const { status } = result.data;
 
     const oldCandidate = await prisma.candidate.findFirst({
       where: { id, tenantId },
@@ -775,8 +787,7 @@ router.post('/:id/approve', requireRoles('BRANCH_ADMIN'), async (req, res) => {
 
     success(res, { message: '考生已审核驳回，并转回意向考生跟进中' });
   } catch (err) {
-    console.error('Approve candidate error:', err);
-    error(res, 'INTERNAL_ERROR', '审核失败', 500);
+    respondWithFriendlyError(res, err, '审核失败');
   }
 });
 

@@ -31,6 +31,7 @@ export type ProductionConfig = {
   ENCRYPTION_KEY: string;
   BACKUP_DIR: string;
   LOG_DIR: string;
+  CORS_ORIGIN: string;
   IS_DOCKER_RUNTIME: boolean;
 };
 
@@ -56,6 +57,7 @@ export const config = {
 
   // 日志
   LOG_DIR: process.env.LOG_DIR || path.resolve(process.cwd(), 'data/logs'),
+  LOG_LEVEL: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
   
   // 提醒
   REMINDER_ENABLED: process.env.REMINDER_ENABLED !== 'false',
@@ -117,6 +119,9 @@ export function validateProductionConfig(values: ProductionConfig): void {
   }
   if (!values.LOG_DIR) {
     errors.push('LOG_DIR 不能为空');
+  }
+  if (!values.CORS_ORIGIN || values.CORS_ORIGIN.trim() === '*') {
+    errors.push('CORS_ORIGIN 生产环境不能为 *，必须配置明确的前端域名白名单');
   }
 
   if (values.IS_DOCKER_RUNTIME) {

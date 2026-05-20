@@ -5,9 +5,15 @@
 import { prisma } from '../lib/prisma.js';
 import { hashPassword } from '../utils/crypto.js';
 import { filingNameForTenantCode } from '../services/tenantOfficialNames.js';
+import { buildSeedUserPasswords } from '../services/seedPasswords.js';
 
 async function seed(): Promise<void> {
   console.log('🌱 开始初始化数据库...');
+
+  const seedPasswordConfig = buildSeedUserPasswords({
+    nodeEnv: process.env.NODE_ENV || 'development',
+    passwordJson: process.env.SEED_USER_PASSWORDS_JSON,
+  });
 
   // 检查是否已有数据
   const existingTenants = await prisma.tenant.count();
@@ -80,7 +86,7 @@ async function seed(): Promise<void> {
     data: {
       tenantId: hq.id,
       username: 'admin',
-      password: await hashPassword('admin123'),
+      password: await hashPassword(seedPasswordConfig.passwords.admin),
       realName: '系统管理员',
       role: 'SYS_ADMIN',
       email: 'admin@ngtcs0013.local',
@@ -94,7 +100,7 @@ async function seed(): Promise<void> {
     data: {
       tenantId: hq.id,
       username: 'hqadmin',
-      password: await hashPassword('hqadmin123'),
+      password: await hashPassword(seedPasswordConfig.passwords.hqadmin),
       realName: '总部管理员',
       role: 'HQ_ADMIN',
       email: 'hqadmin@ngtcs0013.local',
@@ -107,7 +113,7 @@ async function seed(): Promise<void> {
     data: {
       tenantId: hq.id,
       username: 'hqstaff',
-      password: await hashPassword('hqstaff123'),
+      password: await hashPassword(seedPasswordConfig.passwords.hqstaff),
       realName: '总部工作人员',
       role: 'HQ_STAFF',
       email: 'hqstaff@ngtcs0013.local',
@@ -121,7 +127,7 @@ async function seed(): Promise<void> {
     data: {
       tenantId: beijingOps.id,
       username: 'bjadmin',
-      password: await hashPassword('bjadmin123'),
+      password: await hashPassword(seedPasswordConfig.passwords.bjadmin),
       realName: '北京考评管理员',
       role: 'BRANCH_ADMIN',
       email: 'bjadmin@ngtcs0013.local',
@@ -133,7 +139,7 @@ async function seed(): Promise<void> {
     data: {
       tenantId: beijingOps.id,
       username: 'bjstaff',
-      password: await hashPassword('bjstaff123'),
+      password: await hashPassword(seedPasswordConfig.passwords.bjstaff),
       realName: '北京考评工作人员',
       role: 'BRANCH_STAFF',
       email: 'bjstaff@ngtcs0013.local',
@@ -145,7 +151,7 @@ async function seed(): Promise<void> {
     data: {
       tenantId: shenzhen.id,
       username: 'szadmin',
-      password: await hashPassword('szadmin123'),
+      password: await hashPassword(seedPasswordConfig.passwords.szadmin),
       realName: '深圳管理员',
       role: 'BRANCH_ADMIN',
       email: 'szadmin@ngtcs0013.local',
@@ -157,7 +163,7 @@ async function seed(): Promise<void> {
     data: {
       tenantId: shenzhen.id,
       username: 'szstaff',
-      password: await hashPassword('szstaff123'),
+      password: await hashPassword(seedPasswordConfig.passwords.szstaff),
       realName: '深圳工作人员',
       role: 'BRANCH_STAFF',
       email: 'szstaff@ngtcs0013.local',
@@ -169,7 +175,7 @@ async function seed(): Promise<void> {
     data: {
       tenantId: xinjiang.id,
       username: 'xjadmin',
-      password: await hashPassword('xjadmin123'),
+      password: await hashPassword(seedPasswordConfig.passwords.xjadmin),
       realName: '新疆管理员',
       role: 'BRANCH_ADMIN',
       email: 'xjadmin@ngtcs0013.local',
@@ -181,7 +187,7 @@ async function seed(): Promise<void> {
     data: {
       tenantId: xinjiang.id,
       username: 'xjstaff',
-      password: await hashPassword('xjstaff123'),
+      password: await hashPassword(seedPasswordConfig.passwords.xjstaff),
       realName: '新疆工作人员',
       role: 'BRANCH_STAFF',
       email: 'xjstaff@ngtcs0013.local',
@@ -193,7 +199,7 @@ async function seed(): Promise<void> {
     data: {
       tenantId: yunnan.id,
       username: 'ynadmin',
-      password: await hashPassword('ynadmin123'),
+      password: await hashPassword(seedPasswordConfig.passwords.ynadmin),
       realName: '云南管理员',
       role: 'BRANCH_ADMIN',
       email: 'ynadmin@ngtcs0013.local',
@@ -205,7 +211,7 @@ async function seed(): Promise<void> {
     data: {
       tenantId: yunnan.id,
       username: 'ynstaff',
-      password: await hashPassword('ynstaff123'),
+      password: await hashPassword(seedPasswordConfig.passwords.ynstaff),
       realName: '云南工作人员',
       role: 'BRANCH_STAFF',
       email: 'ynstaff@ngtcs0013.local',
@@ -216,18 +222,15 @@ async function seed(): Promise<void> {
 
   console.log('\n🎉 数据库初始化完成！');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('  默认登录账号：');
-  console.log('  • 系统管理员: admin / admin123');
-  console.log('  • 总部管理员: hqadmin / hqadmin123');
-  console.log('  • 总部工作人员: hqstaff / hqstaff123');
-  console.log('  • 北京考评管理员: bjadmin / bjadmin123');
-  console.log('  • 北京考评工作人员: bjstaff / bjstaff123');
-  console.log('  • 深圳管理员: szadmin / szadmin123');
-  console.log('  • 深圳工作人员: szstaff / szstaff123');
-  console.log('  • 新疆管理员: xjadmin / xjadmin123');
-  console.log('  • 新疆工作人员: xjstaff / xjstaff123');
-  console.log('  • 云南管理员: ynadmin / ynadmin123');
-  console.log('  • 云南工作人员: ynstaff / ynstaff123');
+  console.log('  初始化账号已创建，密码来自 SEED_USER_PASSWORDS_JSON 或本次生成的一次性密码。');
+  if (seedPasswordConfig.generatedUsernames.length > 0) {
+    console.log('  以下账号使用本次自动生成的一次性密码，请立即保存到受控密码管理位置：');
+    for (const username of seedPasswordConfig.generatedUsernames) {
+      console.log(`  • ${username}: ${seedPasswordConfig.passwords[username]}`);
+    }
+  } else {
+    console.log('  本次未打印任何密码，请从受控环境变量或密码管理器获取。');
+  }
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 

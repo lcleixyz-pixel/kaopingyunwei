@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 import { recordAudit } from '../utils/audit.js';
 import { canCompleteNode, canCompleteNodeFromTracking } from '../services/phase1Rules.js';
 import { nestedPublishedPlanWhereForRead } from '../services/accessScope.js';
@@ -64,8 +65,7 @@ router.get('/', async (req, res) => {
       isOverdue: node.status !== 'COMPLETED' && node.deadline < now,
     })));
   } catch (err) {
-    console.error('Get nodes error:', err);
-    error(res, 'INTERNAL_ERROR', '获取节点列表失败', 500);
+    respondWithFriendlyError(res, err, '获取节点列表失败');
   }
 });
 
@@ -84,7 +84,7 @@ router.post('/:id/complete', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async
 
     const result = completeNodeSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -175,8 +175,7 @@ router.post('/:id/complete', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async
 
     success(res, updatedNode);
   } catch (err) {
-    console.error('Complete node error:', err);
-    error(res, 'INTERNAL_ERROR', '完成节点失败', 500);
+    respondWithFriendlyError(res, err, '完成节点失败');
   }
 });
 
@@ -206,8 +205,7 @@ router.get('/overdue/list', async (req, res) => {
 
     success(res, nodes);
   } catch (err) {
-    console.error('Get overdue nodes error:', err);
-    error(res, 'INTERNAL_ERROR', '获取逾期节点失败', 500);
+    respondWithFriendlyError(res, err, '获取逾期节点失败');
   }
 });
 

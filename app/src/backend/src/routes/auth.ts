@@ -3,19 +3,14 @@
 // ═══════════════════════════════════════════════════
 
 import { Router } from 'express';
-import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { hashPassword, verifyPassword, generateToken } from '../utils/crypto.js';
 import { success, error } from '../utils/response.js';
 import { loginRateLimiter } from '../services/loginRateLimit.js';
+import { loginSchema, setupSchema } from '../services/authSchemas.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
 
 const router = Router();
-
-const loginSchema = z.object({
-  username: z.string().min(1, '用户名不能为空'),
-  password: z.string().min(1, '密码不能为空'),
-  tenantCode: z.string().optional(),
-});
 
 /**
  * POST /api/auth/login — 用户登录
@@ -24,7 +19,7 @@ router.post('/login', async (req, res) => {
   try {
     const result = loginSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '登录失败');
       return;
     }
 
@@ -111,8 +106,7 @@ router.post('/login', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Login error:', err);
-    error(res, 'INTERNAL_ERROR', '登录失败', 500);
+    respondWithFriendlyError(res, err, '登录失败');
   }
 });
 
@@ -121,6 +115,12 @@ router.post('/login', async (req, res) => {
  */
 router.post('/setup', async (req, res) => {
   try {
+    const result = setupSchema.safeParse(req.body);
+    if (!result.success) {
+      respondWithFriendlyError(res, result.error, '初始化失败');
+      return;
+    }
+
     // 检查是否已有用户
     const existingUsers = await prisma.user.count();
     if (existingUsers > 0) {
@@ -128,7 +128,7 @@ router.post('/setup', async (req, res) => {
       return;
     }
 
-    const { username, password, realName, tenantName } = req.body;
+    const { username, password, realName, tenantName } = result.data;
 
     // 创建总部租户
     const tenant = await prisma.tenant.create({
@@ -167,8 +167,7 @@ router.post('/setup', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Setup error:', err);
-    error(res, 'INTERNAL_ERROR', '初始化失败', 500);
+    respondWithFriendlyError(res, err, '初始化失败');
   }
 });
 

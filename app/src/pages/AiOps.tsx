@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Bot, Heart, HardDrive, Database, Clock, ArrowUpCircle, Download, Upload, Shield, Zap, Loader2, RefreshCw } from 'lucide-react';
+import { PageAlert } from '@/components/common/PageAlert';
+import { useConfirmDialog } from '@/components/common/ConfirmDialog';
 import { useApi } from '@/hooks/useApi';
+import { getFriendlyErrorMessage } from '@/lib/apiError';
 import type { ExportPackageInfo, HealthStatus } from '@/shared';
 
 interface BackupInfo {
@@ -32,6 +35,7 @@ function formatUptime(seconds: number): string {
 
 export default function AiOps() {
   const { get, post } = useApi();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [healthData, setHealthData] = useState<HealthStatus | null>(null);
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -52,8 +56,8 @@ export default function AiOps() {
     try {
       const data = await get<HealthStatus>('/ai-ops/health');
       setHealthData(data);
-    } catch {
-      showMessage('获取系统状态失败', 'error');
+    } catch (err) {
+      showMessage(getFriendlyErrorMessage(err, '获取系统状态失败'), 'error');
     } finally {
       setIsLoadingHealth(false);
     }
@@ -63,14 +67,18 @@ export default function AiOps() {
     try {
       const data = await get<BackupInfo[]>('/ai-ops/backups');
       setBackups(data);
-    } catch { /* ignore */ }
+    } catch (err) {
+      showMessage(getFriendlyErrorMessage(err, '获取备份记录失败'), 'error');
+    }
   }, [get]);
 
   const fetchLogs = useCallback(async () => {
     try {
       const data = await get<LogEntry[]>('/ai-ops/logs', { lines: '20' });
       setLogs(data);
-    } catch { /* ignore */ }
+    } catch (err) {
+      showMessage(getFriendlyErrorMessage(err, '获取日志失败'), 'error');
+    }
   }, [get]);
 
   useEffect(() => {
@@ -86,21 +94,27 @@ export default function AiOps() {
       showMessage('备份完成');
       fetchBackups();
     } catch (err: any) {
-      showMessage(err?.message || '备份失败', 'error');
+      showMessage(getFriendlyErrorMessage(err, '备份失败'), 'error');
     } finally {
       setIsBackingUp(false);
     }
   };
 
   const handleRestore = async (backupId: string) => {
-    if (!confirm('确定要从该备份恢复？恢复前会自动创建当前数据的快照。')) return;
+    const ok = await confirm({
+      title: '恢复备份',
+      description: '确定要从该备份恢复？恢复前会自动创建当前数据的快照。恢复过程中请不要关闭服务或重复点击。',
+      confirmText: '确认恢复',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setIsRestoring(true);
     try {
       await post('/ai-ops/restore', { backupId });
       showMessage('恢复成功');
       fetchHealth();
     } catch (err: any) {
-      showMessage(err?.message || '恢复失败', 'error');
+      showMessage(getFriendlyErrorMessage(err, '恢复失败'), 'error');
     } finally {
       setIsRestoring(false);
     }
@@ -112,12 +126,13 @@ export default function AiOps() {
       setExportInfo(data);
       showMessage(`导出成功: ${data.packageName}`);
     } catch (err: any) {
-      showMessage(err?.message || '导出失败', 'error');
+      showMessage(getFriendlyErrorMessage(err, '导出失败'), 'error');
     }
   };
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -136,9 +151,7 @@ export default function AiOps() {
       </div>
 
       {message && (
-        <div className={`p-3 rounded-lg text-sm ${messageType === 'success' ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
-          {message}
-        </div>
+        <PageAlert tone={messageType}>{message}</PageAlert>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -16,8 +16,11 @@ import { authenticate, requireRoles } from '../middleware/auth.js';
 import { success, error } from '../utils/response.js';
 import { decrypt, sha256 } from '../utils/crypto.js';
 import { recordAudit } from '../utils/audit.js';
-import { applyPdfFont, PdfFontMissingError, requireChinesePdfFont } from '../utils/pdfFonts.js';
+import { applyPdfFont, requireChinesePdfFont } from '../utils/pdfFonts.js';
+import { respondWithFriendlyError } from '../utils/friendlyErrors.js';
+import { createUploadFileFilter, uploadProfiles } from '../utils/uploadValidation.js';
 import { publishedPlanWhereForRead } from '../services/accessScope.js';
+import { createWriteRateLimitMiddleware } from '../services/writeRateLimit.js';
 import { resolvePdfTemplateDefinition, type Table5PdfTemplateDefinition } from '../services/pdfTemplates.js';
 import { pdfDocumentOptionsFromTemplate, renderTable5PdfTemplate } from '../services/pdfTemplateRenderer.js';
 import { formatTenantOfficialName } from '../services/tenantOfficialNames.js';
@@ -38,6 +41,10 @@ import {
 const router = Router();
 
 router.use(authenticate);
+const archiveSubmitRateLimit = createWriteRateLimitMiddleware({
+  routeKey: 'archive-submit-upload',
+  message: '档案盖章件提交过于频繁，请稍后再试',
+});
 
 const archiveSchema = z.object({
   planId: z.string().min(1),
@@ -85,16 +92,7 @@ const signedUpload = multer({
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (_req, file, callback) => {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    const allowedExts = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
-    const allowedMimes = new Set(['application/pdf', 'image/jpeg', 'image/png']);
-    if (allowedExts.has(ext) || allowedMimes.has(file.mimetype)) {
-      callback(null, true);
-      return;
-    }
-    callback(new RouteError('INVALID_FILE_TYPE', '盖章件仅支持 PDF/JPG/PNG', 400));
-  },
+  fileFilter: createUploadFileFilter(uploadProfiles.signedAttachment, '盖章件'),
 });
 
 router.get('/reportable-plans', async (req, res) => {
@@ -167,7 +165,7 @@ router.post('/batches', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async (req
   try {
     const result = reportBatchSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -222,7 +220,7 @@ router.patch('/batches/:id', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), async
     const id = String(req.params.id);
     const result = reportBatchPatchSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -352,7 +350,7 @@ router.get('/batches/:id/signed-file', async (req, res) => {
   }
 });
 
-router.post('/batches/:id/submit', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), signedUpload.single('signedFile'), async (req, res) => {
+router.post('/batches/:id/submit', requireRoles('BRANCH_ADMIN', 'BRANCH_STAFF'), archiveSubmitRateLimit, signedUpload.single('signedFile'), async (req, res) => {
   try {
     const id = String(req.params.id);
     const oldBatch = await prisma.archiveReportBatch.findFirst({
@@ -424,7 +422,7 @@ router.post('/batches/:id/review', requireRoles('SYS_ADMIN', 'HQ_ADMIN'), async 
   try {
     const result = reviewSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -492,7 +490,7 @@ router.post('/', requireRoles('SYS_ADMIN', 'HQ_ADMIN', 'BRANCH_ADMIN'), async (r
     const tenantId = req.tenantId!;
     const result = archiveSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -561,7 +559,7 @@ router.patch('/:id/status', requireRoles('SYS_ADMIN', 'HQ_ADMIN'), async (req, r
     const id = String(req.params.id);
     const result = statusSchema.safeParse(req.body);
     if (!result.success) {
-      error(res, 'VALIDATION_ERROR', '请求参数错误', 400, result.error.message);
+      respondWithFriendlyError(res, result.error, '请求参数错误');
       return;
     }
 
@@ -831,16 +829,7 @@ function encodeContentDisposition(filename: string): string {
 }
 
 function handleRouteError(res: Response, err: unknown, fallbackMessage: string): void {
-  if (err instanceof RouteError) {
-    error(res, err.code, err.message, err.statusCode);
-    return;
-  }
-  if (err instanceof PdfFontMissingError) {
-    error(res, err.code, err.message, err.statusCode);
-    return;
-  }
-  console.error(fallbackMessage, err);
-  error(res, 'INTERNAL_ERROR', fallbackMessage, 500);
+  respondWithFriendlyError(res, err, fallbackMessage);
 }
 
 class RouteError extends Error {

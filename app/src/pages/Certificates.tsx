@@ -15,10 +15,13 @@ import {
   XCircle,
 } from 'lucide-react';
 import { apiClient, useApi } from '@/hooks/useApi';
+import { PageAlert } from '@/components/common/PageAlert';
+import { useConfirmDialog } from '@/components/common/ConfirmDialog';
 import { useAuthStore } from '@/stores/authStore';
 import type { ApiResponse, Candidate, Certificate, Tenant } from '@/shared';
 import { normalizeLevelLabel } from '@/shared';
 import { formatDate, formatDateTime } from '@/lib/dateUtils';
+import { getFriendlyBlobErrorMessage, getFriendlyErrorMessage, normalizeApiError } from '@/lib/apiError';
 
 type ItemType = 'BLANK_CERT' | 'CERT_SHELL';
 type SupplyStatus = 'PENDING' | 'APPROVED' | 'DISPATCHED' | 'RECEIVED' | 'REJECTED';
@@ -261,6 +264,7 @@ const stocktakeTypeLabels: Record<StocktakeType, string> = {
 
 export default function Certificates() {
   const { get, post, patch } = useApi();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuthStore();
   const [plans, setPlans] = useState<CertificatePlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState('');
@@ -388,8 +392,8 @@ export default function Certificates() {
     setError('');
     try {
       await Promise.all([fetchPlans(), fetchOperationalLists()]);
-    } catch (err: any) {
-      setError(err?.message || '获取证书数据失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '获取证书数据失败'));
     } finally {
       setIsLoading(false);
     }
@@ -400,7 +404,7 @@ export default function Certificates() {
   }, [refreshAll]);
 
   useEffect(() => {
-    fetchRecords(selectedPlanId).catch((err: any) => setError(err?.message || '获取证书记录失败'));
+    fetchRecords(selectedPlanId).catch((err) => setError(getFriendlyErrorMessage(err, '获取证书记录失败')));
     setSelectedPrintCertificateIds([]);
     setLastPrintRecordId('');
   }, [fetchRecords, selectedPlanId]);
@@ -418,8 +422,8 @@ export default function Certificates() {
       setNotice(successMessage);
       await refreshAll();
       if (selectedPlanId) await fetchRecords(selectedPlanId);
-    } catch (err: any) {
-      setError(err?.response?.data?.error?.message || err?.message || '操作失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '操作失败'));
     } finally {
       setIsSubmitting(false);
     }
@@ -467,11 +471,13 @@ export default function Certificates() {
       const response = await apiClient.post<ApiResponse<ImportPreview>>('/certificates/records/import-preview', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      if (!response.data.success || !response.data.data) throw new Error(response.data.error?.message || '导入预览失败');
+      if (!response.data.success || !response.data.data) {
+        throw normalizeApiError({ response: { status: response.status, data: response.data } }, '导入预览失败');
+      }
       setImportPreview(response.data.data);
       setNotice('导入预览已生成');
-    } catch (err: any) {
-      setError(err?.response?.data?.error?.message || err?.message || '导入预览失败');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, '导入预览失败'));
     } finally {
       setIsSubmitting(false);
     }
@@ -569,7 +575,13 @@ export default function Certificates() {
   };
 
   const confirmDestroyBatch = async (id: string) => {
-    if (!window.confirm('确认该批次证书已实际销毁并入账？确认后不可重复确认。')) return;
+    const ok = await confirm({
+      title: '确认销毁入账',
+      description: '确认该批次证书已实际销毁并入账？确认后不可重复确认。',
+      confirmText: '确认销毁',
+      tone: 'danger',
+    });
+    if (!ok) return;
     await withSubmit(async () => {
       await post(`/certificates/destroy-batches/${id}/confirm-destroy`, {});
     }, '销毁批次已确认销毁');
@@ -632,8 +644,8 @@ export default function Certificates() {
       link.click();
       link.remove();
       URL.revokeObjectURL(blobUrl);
-    } catch (err: any) {
-      setError(err?.message || '导出失败');
+    } catch (err) {
+      setError(await getFriendlyBlobErrorMessage(err, '导出失败'));
     }
   };
 
@@ -666,6 +678,7 @@ export default function Certificates() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -680,8 +693,8 @@ export default function Certificates() {
         </button>
       </div>
 
-      {error && <Message tone="error" text={error} />}
-      {notice && <Message tone="success" text={notice} />}
+      {error && <PageAlert tone="error">{error}</PageAlert>}
+      {notice && <PageAlert tone="success">{notice}</PageAlert>}
 
       <div className="grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-5">
         <aside className="bg-white border border-slate-200 rounded-lg p-4 space-y-4 h-fit">
@@ -1584,14 +1597,6 @@ function ActionLink({ children, onClick, tone = 'default' }: { children: React.R
     <button onClick={onClick} className={tone === 'danger' ? 'text-red-600 hover:text-red-700 font-medium' : 'text-blue-600 hover:text-blue-700 font-medium'}>
       {children}
     </button>
-  );
-}
-
-function Message({ tone, text }: { tone: 'error' | 'success'; text: string }) {
-  return (
-    <div className={`rounded-lg border px-4 py-3 text-sm ${tone === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'}`}>
-      {text}
-    </div>
   );
 }
 
