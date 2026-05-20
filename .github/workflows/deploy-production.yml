@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Create source package
         run: |
@@ -72,7 +72,12 @@ jobs:
             cd "${DEPLOY_DIR}"
             docker compose --env-file .env config >/tmp/exam-compose-check.yml
             docker compose --env-file .env build
-            docker compose --env-file .env up -d
+            if ! docker compose --env-file .env up -d; then
+              docker compose --env-file .env ps
+              docker compose --env-file .env logs --tail=160 backend
+              docker compose --env-file .env logs --tail=80 frontend
+              exit 1
+            fi
 
             for i in $(seq 1 24); do
               if curl -fsS http://127.0.0.1:8080/api/health >/tmp/exam-health.json; then
