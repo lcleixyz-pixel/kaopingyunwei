@@ -26,6 +26,30 @@
 
 ## 最近完成内容
 
+2026-05-20 友好提示与交互反馈优化：
+
+- 新增 `PageAlert`，统一页面错误、成功、警告和普通信息提示，并为错误提示提供 `role="alert"`。
+- 新增 `useConfirmDialog`，替换业务页面的浏览器原生确认框和取消计划备注输入框。
+- 前端错误工具新增 `getFriendlyErrorMessage` 和 `getFriendlyBlobErrorMessage`，页面不再直接读取原始后端错误结构。
+- 无权限访问页面时不再静默跳回首页，改为显示“没有权限访问该页面”的中文说明；未登录访问业务页面时登录页显示“请先登录后再访问系统”。
+- 仪表盘、证书、档案、AI 运维、系统设置、账号管理、成绩、报名资料、节点追踪、考评计划、意向考生等页面已补齐或统一可见提示。
+- 新增 `docs/UX_ERROR_FEEDBACK_AUDIT.md`，记录逐页检查结果和剩余建议。
+
+2026-05-20 账号密码策略加固：
+
+- 新增 `app/src/backend/src/services/userPasswordPolicy.ts`，统一校验账号管理里的新建账号和重置密码临时口令。
+- `/api/users` 新建账号和 `/api/users/:id/reset-password` 已统一要求临时密码至少 12 位、同时包含大写字母、小写字母、数字和特殊字符，且不能包含用户名。
+- 账号管理弹窗已补充中文 placeholder，提示“至少12位，含大小写、数字和特殊字符”。
+- `docs/USER_MANUAL.md`、`docs/ADMIN_SIMPLE_RUNBOOK.md` 和 `docs/ACCEPTANCE_CHECKLIST.md` 已同步账号临时密码规则。
+
+2026-05-18 使用者文档补充：
+
+- 新增 `docs/USER_QUICK_START.md`，面向第一次使用系统的人，解释系统用途、登录准备、菜单含义、核心流程、提示颜色、分页和常见问题。
+- 新增 `docs/USER_MANUAL.md`，面向日常业务使用者，按页面说明今日工作台、意向考生、考评计划、报名资料、节点追踪、成绩、证书、档案、系统设置和 AI 运维。
+- 新增 `docs/ADMIN_SIMPLE_RUNBOOK.md`，面向非专业管理员，提供健康检查、启动停止、日志查看、备份、更新、账号密码处理和故障判断的傻瓜式步骤。
+- `app/README.md` 已补充文档入口，区分普通使用者、管理员、开发/部署人员分别应该先看哪份文档。
+- `docs/ACCEPTANCE_CHECKLIST.md` 已新增使用文档验收小节，要求文档入口明确、语言非技术化，并禁止出现固定演示密码或真实敏感信息。
+
 2026-05-18 分页优化进展：
 
 - 前端 `useApi` 新增 `getWithMeta`，在保持既有 `get` 调用兼容的同时，可以读取后端 `meta.pagination`。
@@ -149,6 +173,24 @@ Phase 1.3 节点追踪与报名阶段关闭：
 - 审核通过的考生资料再次保存前，前端会提示使用者确认本地上级部门业务系统信息已同步保持一致。
 
 ## 最近验证结果
+
+2026-05-20 友好提示与交互反馈验证：
+
+- 扩展 `app/tests/apiError.test.ts`，覆盖网络失败、超时、401、403、413、429、500 和英文后端错误兜底。
+- 新增 `app/tests/uxFeedbackGuard.test.ts`，防止业务页面回退到原生确认框、直接读取原始错误结构或无权限静默跳首页。
+- 静态扫描确认：业务页面未发现 `window.confirm`、`window.prompt`、`err.response.data.error` 直读；仅 `ErrorBoundary` 保留渲染异常的开发日志。
+
+2026-05-20 账号密码策略验证：
+
+- `node --import tsx --test src/backend/src/services/userPasswordPolicy.test.ts`：通过，4 个测试。
+- 临时 SQLite 数据库 API 验证通过：系统管理员登录成功；短密码返回中文 `临时密码至少需要 12 位`；单一字符类型密码返回中文 `临时密码必须同时包含大写字母、小写字母、数字和特殊字符`；包含用户名的密码返回中文 `临时密码不能包含用户名`；强密码账号创建成功且新账号可登录。
+
+2026-05-18 使用者文档验证：
+
+- `git diff --check`：通过。
+- 固定演示口令扫描：常见初始化演示口令清单在本轮涉及文档中无命中，文档不再重复记录具体口令样例。
+- 密钥扫描：本轮涉及文档未发现真实 `JWT_SECRET` 或 `ENCRYPTION_KEY`；`docs/DEPLOYMENT_CLOUD.md` 中仅保留“替换为至少32字符的随机密钥”的占位说明。
+- 本轮只更新 Markdown 文档和文档入口，不改业务代码、不执行数据库 migration。
 
 2026-05-18 分页优化验证：
 

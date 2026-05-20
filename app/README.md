@@ -68,6 +68,20 @@ npm run dev
 
 seed 会创建系统管理员、总部管理员和分支账号；密码必须通过 `SEED_USER_PASSWORDS_JSON` 注入，或在非生产环境由 seed 生成一次性密码并立即保存到受控密码管理位置。仓库文档不再记录固定演示密码。
 
+## 文档入口
+
+如果你不是开发人员，建议先看这三份：
+
+- [新手快速上手](../docs/USER_QUICK_START.md)：给第一次登录系统的人，照着做即可完成日常操作。
+- [使用者完整手册](../docs/USER_MANUAL.md)：按页面解释每个菜单能做什么、谁能操作、遇到提示怎么办。
+- [管理员傻瓜式运维手册](../docs/ADMIN_SIMPLE_RUNBOOK.md)：给负责服务器、账号、备份和更新的人，包含常见问题处理步骤。
+
+如果你是开发或部署人员，再看这些：
+
+- [云服务器部署指南](../docs/DEPLOYMENT_CLOUD.md)：服务器、Docker、宝塔/Nginx、HTTPS、备份和恢复。
+- [验收清单](../docs/ACCEPTANCE_CHECKLIST.md)：每次上线或改功能前后要检查什么。
+- [AI 交接文档](../docs/AI_HANDOFF.md)：当前项目进度、最近验证结果和下一步注意事项。
+
 ## 9大考评节点
 
 ```

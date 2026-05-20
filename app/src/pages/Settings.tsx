@@ -2,9 +2,11 @@ import { Bell, CalendarDays, CheckCircle2, Database, Download, FileText, Loader2
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { apiClient, useApi } from '@/hooks/useApi';
+import { PageAlert } from '@/components/common/PageAlert';
 import type { CertificatePrintTemplateDefinition, PdfTemplate, PdfTemplateDefinition, PdfTemplateKey, StandardPdfTemplateDefinition, Table5PdfTemplateDefinition, WorkdayCalendar } from '@/shared';
 import { useAuthStore } from '@/stores/authStore';
 import { UserManagementPanel } from '@/components/settings/UserManagementPanel';
+import { getFriendlyBlobErrorMessage, getFriendlyErrorMessage } from '@/lib/apiError';
 
 type TabId = 'accounts' | 'notifications' | 'workdays' | 'backup' | 'pdfTemplates';
 
@@ -52,6 +54,7 @@ export default function Settings() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState<'success' | 'error'>('success');
   const [calendar, setCalendar] = useState<WorkdayCalendar | null>(null);
   const [holidaysText, setHolidaysText] = useState('');
   const [workdaysText, setWorkdaysText] = useState('');
@@ -76,6 +79,9 @@ export default function Settings() {
         const selectedTemplate = templates[0] || null;
         setSelectedTemplateKey(selectedTemplate?.key || '');
         setTemplateDraft(selectedTemplate ? cloneTemplate(selectedTemplate) : null);
+      } catch (err) {
+        setMessageType('error');
+        setMessage(getFriendlyErrorMessage(err, '加载系统设置失败'));
       } finally {
         setIsLoading(false);
       }
@@ -103,9 +109,11 @@ export default function Settings() {
     try {
       const data = await patch<SettingsForm>('/settings', settings);
       setSettings({ ...defaultSettings, ...data });
+      setMessageType('success');
       setMessage('设置已保存');
-    } catch (err: any) {
-      setMessage(err?.message || '保存失败');
+    } catch (err) {
+      setMessageType('error');
+      setMessage(getFriendlyErrorMessage(err, '保存失败'));
     } finally {
       setIsSaving(false);
     }
@@ -124,9 +132,11 @@ export default function Settings() {
       setCalendar(data);
       setHolidaysText(data.holidays.join('\n'));
       setWorkdaysText(data.workdays.join('\n'));
+      setMessageType('success');
       setMessage('工作日历已保存');
-    } catch (err: any) {
-      setMessage(err?.message || '保存工作日历失败');
+    } catch (err) {
+      setMessageType('error');
+      setMessage(getFriendlyErrorMessage(err, '保存工作日历失败'));
     } finally {
       setIsSaving(false);
     }
@@ -154,9 +164,11 @@ export default function Settings() {
       setPdfTemplates((current) => replaceTemplate(current, saved));
       setTemplateDraft(cloneTemplate(saved));
       setSelectedTemplateKey(saved.key);
+      setMessageType('success');
       setMessage('PDF 打印模板已保存');
-    } catch (err: any) {
-      setMessage(err?.message || '保存 PDF 打印模板失败');
+    } catch (err) {
+      setMessageType('error');
+      setMessage(getFriendlyErrorMessage(err, '保存 PDF 打印模板失败'));
     } finally {
       setIsSaving(false);
     }
@@ -171,9 +183,11 @@ export default function Settings() {
       setPdfTemplates((current) => replaceTemplate(current, saved));
       setTemplateDraft(cloneTemplate(saved));
       setSelectedTemplateKey(saved.key);
+      setMessageType('success');
       setMessage('PDF 打印模板已恢复默认');
-    } catch (err: any) {
-      setMessage(err?.message || '重置 PDF 打印模板失败');
+    } catch (err) {
+      setMessageType('error');
+      setMessage(getFriendlyErrorMessage(err, '重置 PDF 打印模板失败'));
     } finally {
       setIsSaving(false);
     }
@@ -189,8 +203,9 @@ export default function Settings() {
       link.download = `${templateDraft.name}-预览.pdf`;
       link.click();
       window.URL.revokeObjectURL(url);
-    } catch (err: any) {
-      setMessage(err?.message || '下载 PDF 模板预览失败');
+    } catch (err) {
+      setMessageType('error');
+      setMessage(await getFriendlyBlobErrorMessage(err, '下载 PDF 模板预览失败'));
     }
   };
 
@@ -205,9 +220,7 @@ export default function Settings() {
       </div>
 
       {message && (
-        <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-sm">
-          {message}
-        </div>
+        <PageAlert tone={messageType}>{message}</PageAlert>
       )}
 
       <div className="flex gap-6">

@@ -48,7 +48,33 @@ describe('frontend API error normalization', () => {
   });
 
   it('uses status-specific Chinese fallbacks when the backend has no message', () => {
+    assert.equal(normalizeApiError({ response: { status: 400, data: {} } }).message, '请求参数有误，请检查后重试');
+    assert.equal(normalizeApiError({ response: { status: 401, data: {} } }).message, '登录状态已失效，请重新登录');
     assert.equal(normalizeApiError({ response: { status: 403, data: {} } }).message, '没有权限执行此操作');
     assert.equal(normalizeApiError({ response: { status: 413, data: {} } }).message, '文件过大，请压缩后再上传');
+    assert.equal(normalizeApiError({ response: { status: 429, data: {} } }).message, '操作过于频繁，请稍后再试');
+    assert.equal(normalizeApiError({ response: { status: 500, data: {} } }).message, '服务器暂时无法完成操作，请稍后再试');
+  });
+
+  it('turns network errors without a response into a friendly message', () => {
+    const result = normalizeApiError({ code: 'ERR_NETWORK', message: 'Network Error' });
+
+    assert.equal(result.code, 'ERR_NETWORK');
+    assert.equal(result.message, '网络连接异常，请检查网络后重试');
+  });
+
+  it('hides English backend messages even when the status is not 500', () => {
+    const result = normalizeApiError({
+      response: {
+        status: 400,
+        data: {
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Expected string, received null' },
+        },
+      },
+    });
+
+    assert.equal(result.code, 'VALIDATION_ERROR');
+    assert.equal(result.message, '请求参数有误，请检查后重试');
   });
 });

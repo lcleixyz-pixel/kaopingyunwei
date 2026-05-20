@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, Plus, Search, Filter, Loader2, Pencil, Send, RotateCcw, XCircle } from 'lucide-react';
+import { PageAlert } from '@/components/common/PageAlert';
+import { useConfirmDialog } from '@/components/common/ConfirmDialog';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { useApi } from '@/hooks/useApi';
 import { getWorkTypesForOccupation, LEVEL_OPTIONS, normalizeLevelLabel, OCCUPATION_OPTIONS, type ExamPlan } from '@/shared';
 import { PLAN_STATUS_LABELS } from '@/lib/constants';
 import { formatDate } from '@/lib/dateUtils';
 import { DEFAULT_PAGE_SIZE, SUMMARY_PAGE_SIZE, clampPageAfterMeta, withPaginationParams, type PaginationMeta, type PaginationState } from '@/lib/apiPagination';
+import { getFriendlyErrorMessage } from '@/lib/apiError';
 import { getPlanStageSummary } from '@/lib/workbenchRules';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -48,6 +51,7 @@ const emptyForm: CreatePlanForm = {
 
 export default function ExamPlans() {
   const { get, getWithMeta, post, patch } = useApi();
+  const { confirm, prompt, confirmDialog } = useConfirmDialog();
   const { user } = useAuthStore();
   const [plans, setPlans] = useState<ExamPlan[]>([]);
   const [allPlans, setAllPlans] = useState<ExamPlan[]>([]);
@@ -79,7 +83,7 @@ export default function ExamPlans() {
       }
       setAllPlans(await get<ExamPlan[]>('/exam-plans', { page: 1, pageSize: SUMMARY_PAGE_SIZE }));
     } catch (err: any) {
-      setError(err?.message || '获取计划列表失败');
+      setError(getFriendlyErrorMessage(err, '获取计划列表失败'));
     } finally {
       setIsLoading(false);
     }
@@ -140,7 +144,7 @@ export default function ExamPlans() {
       closePlanDialog();
       fetchPlans();
     } catch (err: any) {
-      setError(err?.message || (editingPlan ? '保存失败' : '创建失败'));
+      setError(getFriendlyErrorMessage(err, editingPlan ? '保存失败' : '创建失败'));
     } finally {
       setCreating(false);
     }
@@ -167,18 +171,30 @@ export default function ExamPlans() {
   };
 
   const handlePublish = async (plan: ExamPlan) => {
-    const ok = window.confirm(`确认发布「${plan.title}」？发布后会生成考评节点并开放报名资料整理；如需回退，正式考生会转回意向考生。`);
+    const ok = await confirm({
+      title: '发布考评计划',
+      description: `确认发布「${plan.title}」？发布后会生成考评节点并开放报名资料整理；如需回退，正式考生会转回意向考生。`,
+      confirmText: '确认发布',
+      tone: 'warning',
+    });
     if (!ok) return;
     try {
       await patch(`/exam-plans/${plan.id}/publish`);
       fetchPlans();
     } catch (err: any) {
-      setError(err?.message || '发布失败');
+      setError(getFriendlyErrorMessage(err, '发布失败'));
     }
   };
 
   const handleCancel = async (planId: string) => {
-    const reason = window.prompt('请输入取消备注（草稿计划且无考生时才可取消）')?.trim() || '';
+    const reason = await prompt({
+      title: '取消考评计划',
+      description: '请输入取消备注。只有草稿计划且无考生时才可取消。',
+      inputLabel: '取消备注',
+      inputPlaceholder: '请说明取消原因',
+      confirmText: '确认取消',
+      tone: 'danger',
+    }) || '';
     if (!reason) {
       setError('取消计划必须填写备注');
       return;
@@ -187,18 +203,23 @@ export default function ExamPlans() {
       await patch(`/exam-plans/${planId}/cancel`, { reason });
       fetchPlans();
     } catch (err: any) {
-      setError(err?.message || '取消失败');
+      setError(getFriendlyErrorMessage(err, '取消失败'));
     }
   };
 
   const handleRollback = async (planId: string) => {
-    const ok = window.confirm('回退后，该计划下所有正式考生会转回意向考生“跟进中”，正式考生记录会被移除。确定回退到草稿吗？');
+    const ok = await confirm({
+      title: '回退为草稿',
+      description: '回退后，该计划下所有正式考生会转回意向考生“跟进中”，正式考生记录会被移除。确定回退到草稿吗？',
+      confirmText: '确认回退',
+      tone: 'danger',
+    });
     if (!ok) return;
     try {
       await patch(`/exam-plans/${planId}/rollback`, { reason: '页面操作回退至草稿' });
       fetchPlans();
     } catch (err: any) {
-      setError(err?.message || '回退失败');
+      setError(getFriendlyErrorMessage(err, '回退失败'));
     }
   };
 
@@ -215,6 +236,7 @@ export default function ExamPlans() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -234,9 +256,7 @@ export default function ExamPlans() {
         )}
       </div>
 
-      {error && (
-        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
-      )}
+      {error && <PageAlert tone="error">{error}</PageAlert>}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <PlanMetric icon={<CheckCircle2 className="h-4 w-4" />} label="已发布" value={planSummary.totalPublished} tone="green" />

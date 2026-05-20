@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, Pencil, Plus, Search, Trash2, UserPlus, XCircle } from 'lucide-react';
+import { PageAlert } from '@/components/common/PageAlert';
+import { useConfirmDialog } from '@/components/common/ConfirmDialog';
 import { PaginationBar } from '@/components/common/PaginationBar';
 import { useApi } from '@/hooks/useApi';
 import { EDUCATION_OPTIONS, getWorkTypesForOccupation, LEVEL_OPTIONS, normalizeLevelLabel, OCCUPATION_OPTIONS, type ConvertProspectiveCandidateResponse, type ExamPlan, type ProspectiveCandidate, type ProspectiveCandidateStatus } from '@/shared';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/dateUtils';
 import { DEFAULT_PAGE_SIZE, SUMMARY_PAGE_SIZE, clampPageAfterMeta, withPaginationParams, type PaginationMeta, type PaginationState } from '@/lib/apiPagination';
+import { getFriendlyErrorMessage } from '@/lib/apiError';
 import { getProspectSummarySource, summarizeProspects } from '@/lib/workbenchRules';
 
 interface ProspectForm {
@@ -64,6 +67,7 @@ const emptyConvertForm: ConvertForm = {
 
 export default function ProspectiveCandidates() {
   const { get, getWithMeta, post, patch, del } = useApi();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const { user } = useAuthStore();
   const [candidates, setCandidates] = useState<ProspectiveCandidate[]>([]);
   const [allCandidates, setAllCandidates] = useState<ProspectiveCandidate[]>([]);
@@ -113,7 +117,7 @@ export default function ProspectiveCandidates() {
         setPagination((current) => ({ ...current, page: safePage }));
       }
     } catch (err) {
-      setError(getErrorMessage(err, '获取意向考生失败'));
+      setError(getFriendlyErrorMessage(err, '获取意向考生失败'));
     } finally {
       setIsLoading(false);
     }
@@ -180,7 +184,15 @@ export default function ProspectiveCandidates() {
     const duplicate = allCandidates.find((candidate) => (
       candidate.phone === form.phone.trim() && candidate.id !== editingCandidate?.id
     ));
-    if (duplicate && !window.confirm(`重复手机号提醒：${form.phone.trim()} 已存在于「${duplicate.name}」。仍然保存会保留两条线索，请确认是否继续。`)) return;
+    if (duplicate) {
+      const ok = await confirm({
+        title: '重复手机号提醒',
+        description: `${form.phone.trim()} 已存在于「${duplicate.name}」。继续保存会保留两条线索，请确认是否继续。`,
+        confirmText: '仍然保存',
+        tone: 'warning',
+      });
+      if (!ok) return;
+    }
 
     setSaving(true);
     setError('');
@@ -201,21 +213,27 @@ export default function ProspectiveCandidates() {
       setEditingCandidate(null);
       await fetchCandidates();
     } catch (err) {
-      setError(getErrorMessage(err, '保存意向考生失败'));
+      setError(getFriendlyErrorMessage(err, '保存意向考生失败'));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (candidate: ProspectiveCandidate) => {
-    if (!window.confirm(`确定删除意向考生「${candidate.name}」吗？删除后不能恢复。`)) return;
+    const ok = await confirm({
+      title: '删除意向考生',
+      description: `确定删除意向考生「${candidate.name}」吗？删除后不能恢复。`,
+      confirmText: '确认删除',
+      tone: 'danger',
+    });
+    if (!ok) return;
 
     setError('');
     try {
       await del(`/prospective-candidates/${candidate.id}`);
       await fetchCandidates();
     } catch (err) {
-      setError(getErrorMessage(err, '删除意向考生失败'));
+      setError(getFriendlyErrorMessage(err, '删除意向考生失败'));
     }
   };
 
@@ -235,7 +253,7 @@ export default function ProspectiveCandidates() {
       setConvertingCandidate(null);
       await fetchCandidates();
     } catch (err) {
-      setError(getErrorMessage(err, '转为正式考生失败'));
+      setError(getFriendlyErrorMessage(err, '转为正式考生失败'));
     } finally {
       setSaving(false);
     }
@@ -262,6 +280,7 @@ export default function ProspectiveCandidates() {
 
   return (
     <div className="space-y-6">
+      {confirmDialog}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -279,7 +298,7 @@ export default function ProspectiveCandidates() {
         </button>
       </div>
 
-      {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>}
+      {error && <PageAlert tone="error">{error}</PageAlert>}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <ProspectMetric icon={<UserPlus className="h-4 w-4" />} label="跟进中" value={summary.following} tone="blue" />
@@ -571,14 +590,4 @@ function findMatchingPublishedPlan(candidate: ProspectiveCandidate, plans: ExamP
     && (!candidate.intendedProfession || plan.profession === candidate.intendedProfession)
     && (!candidate.intendedLevel || plan.level === candidate.intendedLevel)
   ));
-}
-
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (typeof err === 'object' && err && 'response' in err) {
-    const response = (err as { response?: { data?: { error?: { message?: string; details?: string } } } }).response;
-    const message = response?.data?.error?.message;
-    const details = response?.data?.error?.details;
-    return details ? `${message || fallback}：${details}` : message || fallback;
-  }
-  return err instanceof Error ? err.message : fallback;
 }

@@ -54,6 +54,25 @@ export function normalizeApiError(error: unknown, fallbackMessage = '请求失�
   return new ApiClientError(message, backendCode, status, payload?.meta?.requestId, payload?.error?.details);
 }
 
+export function getFriendlyErrorMessage(error: unknown, fallbackMessage = '请求失败，请稍后重试'): string {
+  return normalizeApiError(error, fallbackMessage).message;
+}
+
+export async function getFriendlyBlobErrorMessage(error: unknown, fallbackMessage = '下载失败，请稍后重试'): Promise<string> {
+  const candidate = error as UnknownHttpError & { response?: { data?: unknown; status?: number } };
+  const data = candidate?.response?.data;
+  if (data instanceof Blob) {
+    const text = await data.text();
+    try {
+      const payload = JSON.parse(text) as ApiErrorPayload;
+      return normalizeApiError({ response: { status: candidate.response?.status, data: payload } }, fallbackMessage).message;
+    } catch {
+      return isUserSafeChineseMessage(text) ? text : fallbackMessage;
+    }
+  }
+  return getFriendlyErrorMessage(error, fallbackMessage);
+}
+
 function statusCodeToCode(status?: number): string {
   switch (status) {
     case 400:

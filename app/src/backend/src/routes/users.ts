@@ -18,6 +18,7 @@ import {
   getAssignableUserRoles,
   isRoleCompatibleWithTenant,
 } from '../services/userManagementRules.js';
+import { validateManagedUserPassword } from '../services/userPasswordPolicy.js';
 
 const router = Router();
 
@@ -51,7 +52,7 @@ const createUserSchema = z.object({
   role: assignableUserRoleSchema,
   phone: optionalText,
   email: optionalEmail,
-  password: z.string().min(6).max(72),
+  password: z.string().min(1, '临时密码不能为空').max(72, '临时密码不能超过 72 位'),
   status: userStatusSchema.default('ACTIVE'),
 });
 
@@ -64,7 +65,7 @@ const updateUserSchema = z.object({
 });
 
 const resetPasswordSchema = z.object({
-  password: z.string().min(6).max(72),
+  password: z.string().min(1, '临时密码不能为空').max(72, '临时密码不能超过 72 位'),
 });
 
 type ManagedUser = Prisma.UserGetPayload<{
@@ -162,6 +163,11 @@ router.post('/', async (req, res) => {
     }
 
     const data = result.data;
+    const passwordPolicy = validateManagedUserPassword({ username: data.username, password: data.password });
+    if (!passwordPolicy.valid) {
+      error(res, 'VALIDATION_ERROR', passwordPolicy.message || '临时密码不符合安全要求', 400);
+      return;
+    }
     if (!canAssignUserRole(req.userRole, data.role)) {
       error(res, 'FORBIDDEN', '无权创建该角色账号', 403);
       return;
@@ -301,6 +307,11 @@ router.post('/:id/reset-password', async (req, res) => {
       targetUserId: oldUser.id,
     })) {
       error(res, 'FORBIDDEN', '无权重置该账号密码', 403);
+      return;
+    }
+    const passwordPolicy = validateManagedUserPassword({ username: oldUser.username, password: result.data.password });
+    if (!passwordPolicy.valid) {
+      error(res, 'VALIDATION_ERROR', passwordPolicy.message || '临时密码不符合安全要求', 400);
       return;
     }
 
