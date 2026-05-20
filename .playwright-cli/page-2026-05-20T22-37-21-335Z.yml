@@ -1,0 +1,19 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - img [ref=e7]
+    - heading "考评分支机构管理系统" [level=1] [ref=e11]
+    - paragraph [ref=e12]: 职业技能等级认定考务全流程管理
+  - generic [ref=e13]:
+    - heading "欢迎登录" [level=2] [ref=e14]
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e17]: 用户名
+        - textbox "请输入用户名" [active] [ref=e18]
+      - generic [ref=e19]:
+        - generic [ref=e20]: 密码
+        - generic [ref=e21]:
+          - textbox "请输入密码" [ref=e22]
+          - button [ref=e23] [cursor=pointer]:
+            - img [ref=e24]
+      - button "登录" [ref=e27] [cursor=pointer]
+    - paragraph [ref=e29]: 系统版本 v1.0.0 · 私有化部署

@@ -10,17 +10,17 @@ import { buildSeedUserPasswords } from '../services/seedPasswords.js';
 async function seed(): Promise<void> {
   console.log('🌱 开始初始化数据库...');
 
-  const seedPasswordConfig = buildSeedUserPasswords({
-    nodeEnv: process.env.NODE_ENV || 'development',
-    passwordJson: process.env.SEED_USER_PASSWORDS_JSON,
-  });
-
   // 检查是否已有数据
   const existingTenants = await prisma.tenant.count();
   if (existingTenants > 0) {
     console.log('✅ 数据库已有数据，跳过初始化');
     return;
   }
+
+  const seedPasswordConfig = buildSeedUserPasswords({
+    nodeEnv: process.env.NODE_ENV || 'development',
+    passwordJson: process.env.SEED_USER_PASSWORDS_JSON,
+  });
 
   // 1. 创建总部租户
   const hq = await prisma.tenant.create({
